@@ -32,12 +32,13 @@ class RCPv1(AdvancedStat):
     def __init__(self, input_df=None):
         self.stat_level = 'Team'
         self.stat_name = 'RCP'
-        stat_version = '1.0'
+        self.stat_version = '1.0'
+        self.idx_col = ['Match_id', 'Map', 'Section', 'Point', 'RoundName', 'Timestamp', 'Team', 'Player', 'Hero']
 
     def ready_df_init(self):
         input_df = self.input_df.reset_index()
         
-        requirement_col : list
+        requirement_col : ['NumAlive']
         ready_col = self.idx_col + requirement_col
         df_init = input_df[ready_col]
 
@@ -45,6 +46,8 @@ class RCPv1(AdvancedStat):
     
     def define_df_stat(self):
         df_init = self.ready_df_init()
+
+        # RCP
 
         return df_stat
     

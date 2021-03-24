@@ -255,3 +255,43 @@ class HealthPercent(TraditionalStat):
     def get_df_result(self):
         df_result = self.merge_df_result()
         return df_result
+
+
+class NumAlive(TraditionalStat):
+    def __init__(self, input_df=None):
+        self.stat_level = 'Team'
+        self.stat_name = 'NumAlive'
+        self.input_df = input_df
+        self.idx_col = ['MatchId', 'Map', 'Section', 'Point', 'RoundName', 'Timestamp', 'Team', 'Player', 'Hero']
+
+    def ready_df_init(self):
+        input_df = self.input_df.reset_index()
+        
+        requirement_col : ['IsAlive']
+        ready_col = self.idx_col + requirement_col
+        df_init = input_df[ready_col]
+
+        return df_init
+    
+    def define_df_stat(self):
+        df_init = self.ready_df_init()
+
+        # NumAlive of each team
+        df_player_alive = df_init.groupby(by=[x for x in self.idx_col if x not in ['Hero']]).mean()
+        df_player_alive[df_player_alive['IsAlive'] < 1]['IsAlive'] = 0 # replace to 0 if IsAlive < 1. This is required where a player change hero in one second.
+        df_stat = df_player_alive.groupby(by=[x for x in self.idx_col if x not in ['Player', 'Hero']]).sum()
+
+        df_stat.rename(columns={'IsAlive':f'{self.stat_name}'})
+
+        return df_stat
+    
+    def merge_df_result(self):
+        df_stat = self.define_df_stat()
+        
+        df_result = pd.merge(self.input_df, df_stat, how='outer', left_index=True, right_index=True)
+
+        return df_result
+    
+    def get_df_result(self):
+        df_result = self.merge_df_result()
+        return df_result
