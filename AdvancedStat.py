@@ -47,7 +47,23 @@ class RCPv1(AdvancedStat):
     def define_df_stat(self):
         df_init = self.ready_df_init()
 
-        # RCP
+        team_name_list = df_init['Team'].unique()
+        team_one_name = 'NYE'
+        team_two_name = [x for x in team_name_list if x != team_one_name]
+
+        # team_one_NumAlive (NYE)
+        team_one_NumAlive = df_init[df_init['Team'] == 'NYE']
+        team_one_NumAlive = team_one_NumAlive.groupby(by=[x for x in self.idx_col if x not in ['Player', 'Hero']]).sum()
+
+        # team_two_NumAlive (Opponent)
+        team_two_NumAlive = df_init[df_init['Team'] != 'NYE']
+        team_two_NumAlive = team_two_NumAlive.groupby(by=[x for x in self.idx_col if x not in ['Player', 'Hero']]).sum()
+
+        df_stat = pd.merge(team_one_NumAlive, team_two_NumAlive, how='outer', on=[x for x in self.idx_col if x not in ['Team', 'Player', 'Hero']], suffixes=(f'_{team_one_name}', f'_{team_two_name}')))
+        df_stat[f'{self.stat_name}'] = (df_stat[f'NumAlive_{team_one_name}']**2 - df_stat[f'NumAlive_{team_two_name}']**2) / (df_stat[[f'NumAlive_{team_one_name}', f'NumAlive_{team_two_name}']].max(axis=1)) # Af = (A0^2 - B0^2)/A0
+        df_stat[f'{self.stat_name}'].fillna(0 )# fill nan=0 in case NumAlive of all teams == 0
+
+        df_stat = df_stat[f'{self.stat_name}']
 
         return df_stat
     
@@ -63,8 +79,43 @@ class RCPv1(AdvancedStat):
         df_result = self.merge_df_result()
         return df_result
 
-class RCPv2(AdvancedStat):
-    pass 
+class FBValue(AdvancedStat):
+    '''
+    FB_value
+    '''
+    def __init__(self):
+        stat_version = '1.0'
+        pass 
+
+    def ready_df_init(self):
+        pass 
+
+    def define_df_stat(self): 
+        pass 
+
+    def merge_df_result(self): 
+        pass 
+
+    def get_df_result(self): 
+
+class DeathRisk(AdvancedStat):
+    '''
+    Death_risk
+    '''
+    def __init__(self):
+        stat_version = '1.0'
+        pass 
+
+    def ready_df_init(self):
+        pass 
+
+    def define_df_stat(self): 
+        pass 
+
+    def merge_df_result(self): 
+        pass 
+
+    def get_df_result(self): 
 
 class DIv1(AdvancedStat):
     '''
