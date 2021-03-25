@@ -267,7 +267,7 @@ class NumAlive(TraditionalStat):
     def ready_df_init(self):
         input_df = self.input_df.reset_index()
         
-        requirement_col : ['IsAlive']
+        requirement_col = ['IsAlive']
         ready_col = self.idx_col + requirement_col
         df_init = input_df[ready_col]
 
@@ -281,7 +281,7 @@ class NumAlive(TraditionalStat):
         df_player_alive[df_player_alive['IsAlive'] < 1]['IsAlive'] = 0 # replace to 0 if IsAlive < 1. This is required where a player change hero in one second.
         df_stat = df_player_alive.groupby(by=[x for x in self.idx_col if x not in ['Player', 'Hero']]).sum()
 
-        df_stat.rename(columns={'IsAlive':f'{self.stat_name}'})
+        df_stat.rename(columns={'IsAlive':f'{self.stat_name}'}, inplace=True)
 
         return df_stat
     
