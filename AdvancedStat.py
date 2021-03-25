@@ -49,23 +49,18 @@ class RCPv1(AdvancedStat):
     def define_df_stat(self):
         df_init = self.ready_df_init()
 
+        # team_names
         team_name_list = df_init['Team'].unique()
         team_one_name = 'NYE'
-        team_two_name = [x for x in team_name_list if x != team_one_name]
-
-        print(team_one_name, team_two_name)
+        team_two_name = [x for x in team_name_list if x != team_one_name][0]
 
         # team_one_NumAlive (NYE)
         team_one_NumAlive = df_init[df_init['Team'] == 'NYE']
         team_one_NumAlive = team_one_NumAlive.groupby(by=self.idx_col).max()
 
-        display(team_one_NumAlive)
-
         # team_two_NumAlive (Opponent)
         team_two_NumAlive = df_init[df_init['Team'] != 'NYE']
         team_two_NumAlive = team_two_NumAlive.groupby(by=self.idx_col).max()
-
-        display(team_two_NumAlive)
 
         df_stat = pd.merge(team_one_NumAlive, team_two_NumAlive, how='outer', on=[x for x in self.idx_col if x not in ['Team']], suffixes=(f'_{team_one_name}', f'_{team_two_name}'))
         df_stat[f'{self.stat_name}'] = (df_stat[f'NumAlive_{team_one_name}']**2 - df_stat[f'NumAlive_{team_two_name}']**2) / (df_stat[[f'NumAlive_{team_one_name}', f'NumAlive_{team_two_name}']].max(axis=1)) # Af = (A0^2 - B0^2)/A0
@@ -91,41 +86,143 @@ class FBValue(AdvancedStat):
     '''
     FB_value
     '''
-    def __init__(self):
-        stat_version = '1.0'
-        pass 
+    def __init__(self, input_df=None):
+        self.stat_level = 'Team'
+        self.stat_name = 'FBValue'
+        self.stat_version = '1.0'
+        self.idx_col = ['MatchId', 'Map', 'Section', 'Timestamp', 'Team', 'Player', 'Hero']
+        self.input_df = input_df
 
     def ready_df_init(self):
-        pass 
+        input_df = self.input_df.reset_index()
+        
+        requirement_col = ['NumAlive', 'FinalBlows/s']
+        ready_col = self.idx_col + requirement_col
+        df_init = input_df[ready_col]
+
+        return df_init
 
     def define_df_stat(self): 
-        pass 
+        def RCP(X, Y):
+            Max = X.combine(Y, max)
+            RCP = (X**2 - Y**2).div(Max)
+            RCP = RCP.fillna(-Y) # fill nan = -Y in case X == 0
+            return RCP
 
-    def merge_df_result(self): 
-        pass 
+        def FB_value(X, Y, FB):
+            FB_value = RCP(X, Y - FB) - RCP(X, Y)
+            return FB_value 
+                
+        df_init = self.ready_df_init()
 
-    def get_df_result(self): 
-        pass 
+        # team_names
+        team_name_list = df_init['Team'].unique()
+        team_one_name = 'NYE'
+        team_two_name = [x for x in team_name_list if x != team_one_name][0]
+        
+        team_one_numalive = df_init.groupby(by=[x for x in self.idx_col if x not in ['Player', 'Hero']])['NumAlive'].max().xs(team_one_name, level='Team', drop_level=False)
+        team_two_numalive = df_init.groupby(by=[x for x in self.idx_col if x not in ['Player', 'Hero']])['NumAlive'].max().xs(team_two_name, level='Team', drop_level=False)
+        df_group = pd.merge(team_one_numalive, team_two_numalive, how='outer', left_index=True, right_index=True, suffixes=(f'_{team_one_name}', f'_{team_two_name}')).fillna(0)
+        df_group = df_group.groupby(by=[x for x in self.idx_col if x not in ['Team', 'Player', 'Hero']]).sum()
+
+        team_one_FB = df_init.groupby(by=self.idx_col)['FinalBlows/s'].max().xs(team_one_name, level='Team', drop_level=False)
+        team_two_FB = df_init.groupby(by=self.idx_col)['FinalBlows/s'].max().xs(team_two_name, level='Team', drop_level=False)
+
+        team_one = pd.merge(team_one_FB, df_group, how='outer', left_index=True, right_index=True)
+        team_two = pd.merge(team_two_FB, df_group, how='outer', left_index=True, right_index=True)
+
+        # FB value
+        team_one_FB_value = FB_value(team_one[f'NumAlive_{team_one_name}'],  team_one[f'NumAlive_{team_two_name}'], team_one['FinalBlows/s'])
+        team_two_FB_value = FB_value(team_two[f'NumAlive_{team_two_name}'],  team_two[f'NumAlive_{team_one_name}'], team_two['FinalBlows/s'])
+
+        FB_value = pd.concat([team_one_FB_value, team_two_FB_value]).groupby(by=self.idx_col).max()
+        FB_value.rename(f'{self.stat_name}', inplace=True)
+
+        df_stat = FB_value
+
+        return df_stat
+
+    def merge_df_result(self):
+        df_stat = self.define_df_stat()
+        
+        df_result = pd.merge(self.input_df, df_stat, how='outer', left_index=True, right_index=True)
+
+        return df_result
+    
+    def get_df_result(self):
+        df_result = self.merge_df_result()
+        return df_result
 
 class DeathRisk(AdvancedStat):
     '''
     Death_risk
     '''
-    def __init__(self):
-        stat_version = '1.0'
-        pass 
+    def __init__(self, input_df=None):
+        self.stat_level = 'Team'
+        self.stat_name = 'DeathRisk'
+        self.stat_version = '1.0'
+        self.idx_col = ['MatchId', 'Map', 'Section', 'Timestamp', 'Team', 'Player', 'Hero']
+        self.input_df = input_df
 
     def ready_df_init(self):
-        pass 
+        input_df = self.input_df.reset_index()
+        
+        requirement_col = ['NumAlive', 'Deaths/s']
+        ready_col = self.idx_col + requirement_col
+        df_init = input_df[ready_col]
+
+        return df_init
 
     def define_df_stat(self): 
-        pass 
+        def RCP(X, Y):
+            Max = X.combine(Y, max)
+            RCP = (X**2 - Y**2).div(Max)
+            RCP = RCP.fillna(-Y) # fill nan = -Y in case X == 0
+            return RCP
+       
+        def Death_risk(X, Y, Death):
+            Death_risk = RCP(X, Y) - RCP(X - Death, Y)
+            return Death_risk
+        
+        df_init = self.ready_df_init()
 
-    def merge_df_result(self): 
-        pass 
+        # team_names
+        team_name_list = df_init['Team'].unique()
+        team_one_name = 'NYE'
+        team_two_name = [x for x in team_name_list if x != team_one_name][0]
+        
+        team_one_numalive = df_init.groupby(by=[x for x in self.idx_col if x not in ['Player', 'Hero']])['NumAlive'].max().xs(team_one_name, level='Team', drop_level=False)
+        team_two_numalive = df_init.groupby(by=[x for x in self.idx_col if x not in ['Player', 'Hero']])['NumAlive'].max().xs(team_two_name, level='Team', drop_level=False)
+        df_group = pd.merge(team_one_numalive, team_two_numalive, how='outer', left_index=True, right_index=True, suffixes=(f'_{team_one_name}', f'_{team_two_name}')).fillna(0)
+        df_group = df_group.groupby(by=[x for x in self.idx_col if x not in ['Team', 'Player', 'Hero']]).sum()
 
-    def get_df_result(self): 
-        pass
+        team_one_Death = df_init.groupby(by=self.idx_col)['Deaths/s'].max().xs(team_one_name, level='Team', drop_level=False)
+        team_two_Death = df_init.groupby(by=self.idx_col)['Deaths/s'].max().xs(team_two_name, level='Team', drop_level=False)
+
+        team_one = pd.merge(team_one_Death, df_group, how='outer', left_index=True, right_index=True)
+        team_two = pd.merge(team_two_Death, df_group, how='outer', left_index=True, right_index=True)
+
+        # Death_risk
+        team_one_Death_risk = Death_risk(team_one[f'NumAlive_{team_one_name}'],  team_one[f'NumAlive_{team_two_name}'], team_one['Deaths/s'])
+        team_two_Death_risk = Death_risk(team_two[f'NumAlive_{team_two_name}'],  team_two[f'NumAlive_{team_one_name}'], team_two['Deaths/s'])
+
+        Death_risk = pd.concat([team_one_Death_risk, team_two_Death_risk]).groupby(by=self.idx_col).max()
+        Death_risk.rename(f'{self.stat_name}', inplace=True)
+
+        df_stat = Death_risk
+
+        return df_stat
+
+    def merge_df_result(self):
+        df_stat = self.define_df_stat()
+        
+        df_result = pd.merge(self.input_df, df_stat, how='outer', left_index=True, right_index=True)
+
+        return df_result
+    
+    def get_df_result(self):
+        df_result = self.merge_df_result()
+        return df_result
 
 class DIv1(AdvancedStat):
     '''
