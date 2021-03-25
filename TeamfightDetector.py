@@ -6,104 +6,117 @@ class TeamfightDetector():
         version = '1.0'
         self.input_df = input_df
 
-        # status checking variables
-        self.is_TF_ongoing = False 
-        self.FB_happened = False 
-        self.FB_silence = False 
-
-        # TF timestamps variables
-        self.TF_start_time_stamps = []
-        self.TF_end_time_stamps = []
-
-        # threshold variables
-        self.HDD_threshold = 500
-        self.HDD_lull_cut = 500
-        self.FB_threshold = 0
-        self.possible_time_variance = 2
-        self.no_FB_duration = 10
+        # MatchId
+        self.MatchId = self.input_df.index.unique('MatchId')[0]
+        # Map 
+        self.Map = self.input_df.index.unique('Map')[0]
+        # section list 
+        self.section_list = self.input_df.index.unique('Section')
+        # team names
+        team_name_list = self.input_df.index.unique('Team')
+        self.team_one_name = 'NYE'
+        self.team_two_name = [x for x in team_name_list if x != self.team_one_name][0]
 
         # idx_col
-        self.idx_col = ['MatchId', 'Map', 'Section', 'RoundName', 'Timestamp', 'Point', 'Team', 'Player', 'Hero']
+        self.idx_col = ['MatchId', 'Map', 'Section', 'Timestamp', 'Team', 'RoundName', 'Point', 'Player', 'Hero']
 
-    def roll_df_input(self):
-        df_init = self.df_input.reset_index()
-        section_list = df_init['Section'].unique()
-        df_init = df_init.groupby(by=self.idx_col).sum()
+    def ready_df_init(self):
+        df_init = self.input_df.reset_index()
+
+        requirement_col = ['HeroDamageDealt/s', 'FinalBlows/s', 'RCP']
+        ready_col = self.idx_col + requirement_col
+        df_init = df_init[ready_col]
+
+        # split 'hero_level_stats', 'team_level_stats', 'map_level_stats'
+        hero_level_stats = df_init.groupby(by=[x for x in self.idx_col if x not in ['Team', 'RoundName', 'Point', 'Player', 'Hero']]).sum()[['HeroDamageDealt/s', 'FinalBlows/s']]
+        map_level_stats = df_init.groupby(by=[x for x in self.idx_col if x not in ['Team', 'RoundName', 'Point', 'Player', 'Hero']]).max()[['RCP']]
+        df_init = pd.merge(hero_level_stats, map_level_stats, how='outer', left_index=True, right_index=True)
+
+        return df_init 
+    
+    def roll_df_init(self):
+        df_init = self.ready_df_init()
+
+        section_list = df_init.index.unique('Section')
 
         TF_rolling = pd.DataFrame()
         for section in section_list:
             df_tmp = df_init.xs(section, level='Section', drop_level=False)
-            TF_rolling_tmp = df_tmp.groupby(by=[x for x in self.idx_col if x not in ['Point', 'Team', 'Player', 'Hero']]).sum()
-            TF_rolling_tmp = TF_rolling_tmp.rolling(window=10, center=True).sum().fillna(TF_rolling_tmp) # default window=10 sec
+            TF_rolling_tmp = df_tmp.rolling(window=10, center=True).sum().fillna(df_tmp) # default window=10 sec
             TF_rolling = pd.concat([TF_rolling, TF_rolling_tmp])
 
-        TF_rolling = TF_rolling.groupby(by=['MatchId', 'Map', 'Section', 'Timestamp']).sum()[['HeroDamageDealt/s', 'FinalBlows/s']]
+        # TF_rolling = TF_rolling.groupby(by=['MatchId', 'Map', 'Section', 'Timestamp']).sum()[['HeroDamageDealt/s', 'FinalBlows/s']]
         TF_rolling.rename(columns={'HeroDamageDealt/s':'HDD', 'FinalBlows/s':'FB'}, inplace=True)
 
-        RCP = df_init.groupby(by=['MatchId', 'Map', 'Section', 'Timestamp']).max()[['RCP']]
+        # RCP = df_init.groupby(by=['MatchId', 'Map', 'Section', 'Timestamp']).max()[['RCP']]
+        # TF_rolling = pd.merge(TF_rolling, RCP, how='outer', left_index=True, right_index=True)
 
-        TF_rolling = pd.merge(TF_rolling, RCP, how='outer', left_index=True, right_index=True)
-        pass
+        return TF_rolling
 
-    def detect_teamfight(self): 
-        pass 
+    def set_TF_info(self): 
+        TF_rolling = self.roll_df_init()
 
-    def get_teamfight_info(self): 
-        pass 
+        TF_info = pd.DataFrame()
+        for section in self.section_list:
+            TF_rolling_tmp = TF_rolling.xs(section, level='Section', drop_level=False)
+            TF_rolling_tmp = TF_rolling_tmp.reset_index()
+            TF_rolling_tmp = TF_rolling_tmp.set_index('Timestamp')
+            df_TF = TF_detector(TF_rolling_tmp) # TF_detector
+            TF_time_range = get_true_range(df_TF)
 
+            # define TF winner and RCP
+            TF_winner_list = []
+            TF_order_list = []
+            TF_duration_list = []
+            TF_RCP_list = []
+            TF_order = 0
+            
+            for idx in TF_time_range.index:
+                TF_order += 1
+                TF_order_list.append(TF_order)
+                TF_duration_list.append((TF_time_range.loc[idx, 'TF_end_time'] - TF_time_range.loc[idx, 'TF_start_time'])) # TF duration in s
+                TF_RCP_sum = TF_rolling_tmp.loc[TF_time_range.loc[idx, 'TF_start_time']:TF_time_range.loc[idx, 'TF_end_time'], 'RCP'].sum()
+                TF_RCP_list.append(TF_RCP_sum) # RCP
+                if TF_RCP_sum > 0:
+                    TF_winner_list.append(self.team_one_name)
+                elif TF_RCP_sum == 0:
+                    TF_winner_list.append('draw')
+                else:
+                    TF_winner_list.append(self.team_two_name)
+            TF_time_range['TF_order'] = TF_order_list
+            TF_time_range['TF_winner'] = TF_winner_list
+            TF_time_range['TF_duration'] = TF_duration_list
+            TF_time_range['TF_RCP_sum'] = TF_RCP_list
 
+            TF_time_range['MatchId'] = self.MatchId
+            TF_time_range['Map'] = self.Map
+            TF_time_range['Section'] = section
 
-
-
-
-
-class TeamfightConditions(): 
-    def __init__(self):
-        self.is_TF_ongoing
-        self.FB_happened
-        self.FB_silence
-
-class TeamfightStartConditions(TeamfightConditions):
-    '''
-    <시작 조건>
-    시작 조건 0. TF 중 = False
-    시작 조건 1. time > 이전 TF 종료 시간
-    시작 조건 2. HDD >= {HDD_threshold=500} (time - )
-    시작 조건 3. FB > 0, time - {possible_time_variance=1}
-    시작 조건 4. HDD >= {HDD_threshold=500} 시간 이후, first FB=False 상태로 HDD < {HDD_lull_cut=50} 생기면 이전 HDD time 제외
-    '''
-    def __init__(self): 
-        pass 
-
-    def cond0(): 
-        pass 
-    def cond1(): 
-        pass
-
-    def check_signal(self):
-        pass
-
-class TeamfightEndConditions(TeamfightConditions):
-    '''
-    <종료 조건>
-    종료 조건 0. TF 진행 중 = True
-    종료 조건 1. FB = 0 이 {no_FB_duration=10}초 이상
-    종료 조건 2. time = ts_map_end_time
-
-    *stagger
-    *길어지는 한타
-    FB 0 되고 10s동안 추가 킬이 없어야 한타 종료로 인정
-    '''
-    def cond0(self): 
-        pass 
-
-    def cond1(self): 
-        pass 
-
-    def check_signal(self):
-        pass
+            TF_info = pd.concat([TF_info, TF_time_range])
         
+        return TF_info
 
+    def get_df_result(self): 
+        TF_info = self.set_TF_info()
+
+        tmp_merge = pd.DataFrame()
+        for section in self.section_list:
+            tmp = self.input_df.xs(section, level='Section', drop_level=False)
+            tmp = tmp.reset_index().set_index('Timestamp')
+            TF_info_tmp = TF_info[TF_info['Section'] == section]
+            for idx in TF_info_tmp.index:
+                start, end = TF_info_tmp.loc[idx, 'TF_start_time'], TF_info_tmp.loc[idx, 'TF_end_time']
+                tmp.loc[start:end, 'TF_order'] = TF_info_tmp.loc[idx, 'TF_order']
+                tmp.loc[start:end, 'TF_winner'] = TF_info_tmp.loc[idx, 'TF_winner']
+                tmp.loc[start:end, 'TF_duration'] = TF_info_tmp.loc[idx, 'TF_duration']
+                tmp.loc[start:end, 'TF_RCP_sum'] = TF_info_tmp.loc[idx, 'TF_RCP_sum']
+            
+            tmp_merge = pd.concat([tmp_merge, tmp])
+        
+        df_result = tmp_merge 
+
+        return df_result
+        
 '''
 '''
 # TF detector
@@ -194,7 +207,6 @@ def TF_detector(df_rolling):
             else:
                 cond5 = False
             return cond5 
-
 
         # check if start_condition == True
         start_condition = condition0() & condition1(idx) & ( (condition2(idx) & condition4(idx) & condition5(idx)) | condition3(idx) ) 
@@ -309,84 +321,3 @@ def get_true_range(df=None, column='TF_status'):
     TF_time_range = pd.DataFrame(range_list, columns=['TF_start_time', 'TF_end_time'])
     
     return TF_time_range # df[['TF_start_time', 'TF_end_time']]
-
-''' 
-'''
-# get TF_info
-        def TF_info(df_merge):
-            df_merge = df_merge.reset_index()
-            section_list = df_merge['Section'].unique()
-            df_merge = df_merge.groupby(by=['MatchId', 'Map', 'Section', 'Timestamp', 'Team', 'Player', 'Hero']).sum()
-
-            TF_rolling = pd.DataFrame()
-            for section in section_list:
-                df_tmp = df_merge.xs(section, level='Section', drop_level=False)
-                TF_rolling_tmp = df_tmp.groupby(by=['MatchId', 'Map', 'Section', 'Timestamp']).sum()
-                TF_rolling_tmp = TF_rolling_tmp.rolling(window=10, center=True).sum().fillna(TF_rolling_tmp) # default window=10 sec
-                TF_rolling = pd.concat([TF_rolling, TF_rolling_tmp])
-
-            TF_rolling = TF_rolling.groupby(by=['MatchId', 'Map', 'Section', 'Timestamp']).sum()[['HeroDamageDealt/s', 'FinalBlows/s']]
-            TF_rolling.rename(columns={'HeroDamageDealt/s':'HDD', 'FinalBlows/s':'FB'}, inplace=True)
-
-            RCP = df_merge.groupby(by=['MatchId', 'Map', 'Section', 'Timestamp']).max()[['RCP']]
-
-            TF_rolling = pd.merge(TF_rolling, RCP, how='outer', left_index=True, right_index=True)
-
-            TF_info = pd.DataFrame()
-            for section in section_list:
-                TF_rolling_tmp = TF_rolling.xs(section, level='Section', drop_level=False)
-                TF_rolling_tmp = TF_rolling_tmp.reset_index()
-                TF_rolling_tmp = TF_rolling_tmp.set_index('Timestamp')
-                df_TF = TF_detector(TF_rolling_tmp) # TF_detector
-                TF_time_range = get_true_range(df_TF)
-
-                # define TF winner and RCP
-                TF_winner_list = []
-                TF_order_list = []
-                TF_duration_list = []
-                TF_RCP_list = []
-                TF_order = 0
-                
-                for idx in TF_time_range.index:
-                    TF_order += 1
-                    TF_order_list.append(TF_order)
-                    TF_duration_list.append((TF_time_range.loc[idx, 'TF_end_time'] - TF_time_range.loc[idx, 'TF_start_time'])) # TF duration in s
-                    TF_RCP_sum = TF_rolling_tmp.loc[TF_time_range.loc[idx, 'TF_start_time']:TF_time_range.loc[idx, 'TF_end_time'], 'RCP'].sum()
-                    TF_RCP_list.append(TF_RCP_sum) # RCP
-                    if TF_RCP_sum > 0:
-                        TF_winner_list.append(team_one_name)
-                    elif TF_RCP_sum == 0:
-                        TF_winner_list.append('draw')
-                    else:
-                        TF_winner_list.append(team_two_name)
-                TF_time_range['TF_order'] = TF_order_list
-                TF_time_range['TF_winner'] = TF_winner_list
-                TF_time_range['TF_duration'] = TF_duration_list
-                TF_time_range['TF_RCP_sum'] = TF_RCP_list
-
-                TF_time_range['MatchId'] = self.match_id
-                TF_time_range['Map'] = self.df_init['Map'].unique()[0]
-                TF_time_range['Section'] = section
-
-                TF_info = pd.concat([TF_info, TF_time_range])
-            
-            return TF_info
-
-        self.TF_info = TF_info(df_merge)
-
-        # add TF_info
-        tmp_merge = pd.DataFrame()
-        for section in section_list:
-            tmp = df_merge.xs(section, level='Section', drop_level=False)
-            tmp = tmp.reset_index().set_index('Timestamp')
-            TF_info_tmp = self.TF_info[self.TF_info['Section'] == section]
-            for idx in TF_info_tmp.index:
-                start, end = TF_info_tmp.loc[idx, 'TF_start_time'], TF_info_tmp.loc[idx, 'TF_end_time']
-                tmp.loc[start:end, 'TF_order'] = TF_info_tmp.loc[idx, 'TF_order']
-                tmp.loc[start:end, 'TF_winner'] = TF_info_tmp.loc[idx, 'TF_winner']
-                tmp.loc[start:end, 'TF_duration'] = TF_info_tmp.loc[idx, 'TF_duration']
-                tmp.loc[start:end, 'TF_RCP_sum'] = TF_info_tmp.loc[idx, 'TF_RCP_sum']
-            
-            tmp_merge = pd.concat([tmp_merge, tmp])
-        
-        df_merge = tmp_merge

@@ -234,7 +234,6 @@ class HealthPercent(TraditionalStat):
         for hero in hero_list:
             hero_col = df_init[df_init['Hero'] == hero]
             max_health = hero_col.loc[min(hero_col.index),'Health']
-            print(hero, max_health)
             hero_col['new_col'] = hero_col['Health'] / max_health
             hero_col.rename(columns={'new_col':f'{self.stat_name}'}, inplace=True)
 

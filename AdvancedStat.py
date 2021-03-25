@@ -49,6 +49,12 @@ class RCPv1(AdvancedStat):
     def define_df_stat(self):
         df_init = self.ready_df_init()
 
+        def RCP(X, Y):
+            Max = X.combine(Y, max)
+            RCP = (X**2 - Y**2).div(Max)
+            RCP = RCP.fillna(-Y) # fill nan = -Y in case X == 0
+            return RCP
+
         # team_names
         team_name_list = df_init['Team'].unique()
         team_one_name = 'NYE'
@@ -110,7 +116,7 @@ class FBValue(AdvancedStat):
             return RCP
 
         def FB_value(X, Y, FB):
-            FB_value = RCP(X, Y - FB) - RCP(X, Y)
+            FB_value = abs(RCP(X, Y + FB) - RCP(X, Y))
             return FB_value 
                 
         df_init = self.ready_df_init()
@@ -181,7 +187,7 @@ class DeathRisk(AdvancedStat):
             return RCP
        
         def Death_risk(X, Y, Death):
-            Death_risk = RCP(X, Y) - RCP(X - Death, Y)
+            Death_risk = abs(RCP(X + Death, Y) - RCP(X, Y))
             return Death_risk
         
         df_init = self.ready_df_init()
@@ -227,6 +233,9 @@ class DeathRisk(AdvancedStat):
 class DIv1(AdvancedStat):
     '''
     Dominance Index version 1
+    dRCP = (team_one's RCP) - (team_two's RCP)
+    for teamfight in TF_time_range:
+        DI = mean(sum(dRCP)) / std(sum(dRCP))
     '''
     def __init__(self):
         stat_version = '1.0'
