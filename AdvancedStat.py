@@ -1,5 +1,6 @@
 from abc import *
 import pandas as pd 
+import numpy as np
 
 class AdvancedStat(metaclass=ABCMeta):
     def __init__(self, input_df=None):
@@ -232,26 +233,50 @@ class DeathRisk(AdvancedStat):
 
 class DIv1(AdvancedStat):
     '''
-    Dominance Index version 1
-    dRCP = (team_one's RCP) - (team_two's RCP)
-    for teamfight in TF_time_range:
-        DI = mean(sum(dRCP)) / std(sum(dRCP))
+    Dominance Index version 2
+    DI (Inverse Coefficient of Variation) = (mean(X) / variance(X))
+    X = (TF_RCP_sum/TF_duration)
     '''
-    def __init__(self):
-        stat_version = '1.0'
-        pass 
+    def __init__(self, input_df=None):
+        self.stat_level = 'Map'
+        self.stat_name = 'DominanceIndex'
+        self.stat_version = '2.0'
+        self.idx_col = ['MatchId', 'Map', 'Section', 'TF_order']
+        self.input_df = input_df
 
     def ready_df_init(self):
-        pass 
+        input_df = self.input_df.reset_index()
+        
+        requirement_col = ['TF_RCP_sum', 'TF_duration']
+        ready_col = self.idx_col + requirement_col
+        df_init = input_df[ready_col]
 
-    def define_df_stat(self): 
-        pass 
+        return df_init
+    
+    def define_df_stat(self):
+        df_init = self.ready_df_init()
 
-    def merge_df_result(self): 
-        pass 
+        df_stat = df_init.groupby(by=self.idx_col).max()
+        df_stat['TF_RCP_sum/s'] = df_stat['TF_RCP_sum'].div(df_stat['TF_duration'])
 
-    def get_df_result(self): 
-        pass
+        def DominanceIndex(X):
+            DI = X.mean() / X.var()
+            return DI
+        
+        df_stat['DominanceIndex'] = DominanceIndex(df_stat['TF_RCP_sum/s'])
+        
+        return df_stat
+    
+    def merge_df_result(self):
+        df_stat = self.define_df_stat()
+        df_stat = df_stat['DominanceIndex']
+        df_result = pd.merge(self.input_df, df_stat, how='outer', left_index=True, right_index=True)
+
+        return df_result
+    
+    def get_df_result(self):
+        df_result = self.merge_df_result()
+        return df_result
 
 
 

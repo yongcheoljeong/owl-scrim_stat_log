@@ -118,6 +118,7 @@ class ScrimLog():
         df_AdvancedStat = FBValue(df_AdvancedStat).get_df_result()
         # Death_risk
         df_AdvancedStat = DeathRisk(df_AdvancedStat).get_df_result()
+        
 
         # indexing
         df_AdvancedStat = df_AdvancedStat.groupby(by=self.idx_col).sum()
@@ -125,10 +126,7 @@ class ScrimLog():
         self.df_AdvancedStat = df_AdvancedStat
     
     def set_TF_Timeline(self):
-        df_FinalStat = TeamfightDetector(self.df_AdvancedStat).get_df_result()
-        
-        self.df_FinalStat = df_FinalStat
-
+        df_TFStat = TeamfightDetector(self.df_AdvancedStat).get_df_result()
 
         # reset index and grouping
         def indexing(df):
@@ -136,8 +134,12 @@ class ScrimLog():
             df = df.groupby(by=self.idx_col).max()
             return df 
         
-        self.df_FinalStat = indexing(self.df_FinalStat)
+        df_TFStat = indexing(df_TFStat)
 
+        # DominanceIndex
+        df_TFStat = DIv1(df_TFStat).get_df_result()
+
+        self.df_FinalStat = df_TFStat
     
     def get_df_FinalStat(self):
         return self.df_FinalStat
