@@ -231,7 +231,7 @@ class DeathRisk(AdvancedStat):
         df_result = self.merge_df_result()
         return df_result
 
-class DIv1(AdvancedStat):
+class DIv2(AdvancedStat):
     '''
     Dominance Index version 2
     DI (Inverse Coefficient of Variation) = (mean(X) / variance(X))
@@ -269,6 +269,7 @@ class DIv1(AdvancedStat):
     
     def merge_df_result(self):
         df_stat = self.define_df_stat()
+        df_stat = df_stat.reset_index().set_index(['MatchId', 'Map'])
         df_stat = df_stat['DominanceIndex']
         df_result = pd.merge(self.input_df, df_stat, how='outer', left_index=True, right_index=True)
 
