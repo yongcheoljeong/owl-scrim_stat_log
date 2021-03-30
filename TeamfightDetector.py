@@ -45,11 +45,11 @@ class TeamfightDetector():
             TF_rolling_tmp = df_tmp.rolling(window=10, center=True).sum().fillna(df_tmp) # default window=10 sec
             TF_rolling = pd.concat([TF_rolling, TF_rolling_tmp])
 
-        # TF_rolling = TF_rolling.groupby(by=['MatchId', 'Map', 'Section', 'Timestamp']).sum()[['HeroDamageDealt/s', 'FinalBlows/s']]
+        TF_rolling = TF_rolling.groupby(by=['MatchId', 'Map', 'Section', 'Timestamp']).sum()[['HeroDamageDealt/s', 'FinalBlows/s']]
         TF_rolling.rename(columns={'HeroDamageDealt/s':'HDD', 'FinalBlows/s':'FB'}, inplace=True)
 
-        # RCP = df_init.groupby(by=['MatchId', 'Map', 'Section', 'Timestamp']).max()[['RCP']]
-        # TF_rolling = pd.merge(TF_rolling, RCP, how='outer', left_index=True, right_index=True)
+        RCP = df_init.groupby(by=['MatchId', 'Map', 'Section', 'Timestamp']).max()[['RCP']]
+        TF_rolling = pd.merge(TF_rolling, RCP, how='outer', left_index=True, right_index=True)
 
         return TF_rolling
 
