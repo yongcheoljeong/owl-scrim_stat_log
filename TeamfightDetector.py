@@ -3,7 +3,7 @@ import pandas as pd
 class TeamfightDetector():
    
     def __init__(self, input_df=None):
-        version = '1.0'
+        version = '1.1'
         self.input_df = input_df
 
         # MatchId
@@ -42,20 +42,32 @@ class TeamfightDetector():
         TF_rolling = pd.DataFrame()
         for section in section_list:
             df_tmp = df_init.xs(section, level='Section', drop_level=False)
-            TF_rolling_tmp = df_tmp.rolling(window=10, center=True).sum().fillna(df_tmp) # default window=10 sec
+            TF_rolling_tmp = df_tmp.rolling(window=10, min_periods=1).sum() #.fillna(df_tmp) # default window=10 sec v1.1
             TF_rolling = pd.concat([TF_rolling, TF_rolling_tmp])
 
-        TF_rolling = TF_rolling.groupby(by=['MatchId', 'Map', 'Section', 'Timestamp']).sum()[['HeroDamageDealt/s', 'FinalBlows/s']]
+        TF_rolling = TF_rolling.groupby(by=['MatchId', 'Map', 'Section', 'Timestamp']).sum()[['HeroDamageDealt/s', 'FinalBlows/s']] # For RCP not rolling
         TF_rolling.rename(columns={'HeroDamageDealt/s':'HDD', 'FinalBlows/s':'FB'}, inplace=True)
 
-        RCP = df_init.groupby(by=['MatchId', 'Map', 'Section', 'Timestamp']).max()[['RCP']]
-        TF_rolling = pd.merge(TF_rolling, RCP, how='outer', left_index=True, right_index=True)
+        RCP = df_init.groupby(by=['MatchId', 'Map', 'Section', 'Timestamp']).max()[['RCP']] # For RCP not rolling
+        TF_rolling = pd.merge(TF_rolling, RCP, how='outer', left_index=True, right_index=True) # For RCP not rolling
 
         return TF_rolling
 
     def set_TF_info(self): 
         TF_rolling = self.roll_df_init()
 
+
+        def TFWinnerDetector():
+            '''
+            TF_RCP_sum 만으로 winner 판단하면 안 되는 예시:
+            (20210325_01, Dorado, 1, TF#3) 처럼 마지막에 급격하게 RCP 변화가 있을 경우 TF 전반적으로 HZS가 유리했더라도 마지막에 NYE가 한타 뒤집어버리는 경우
+            (20210325_01, Temple of Anubis, 2, TF#1) 위와 같은 경우
+            그럼 마지막 RCP 높은 쪽으로 승리 팀을 판단하면 되나? 이것도 안됨.
+            마지막 RCP 높은 쪽으로 winner 판단하면 안 되는 예시:
+            (20210325_02, Dorado, 0, TF#4) 처럼 일방적으로 TAL 쪽에서 FB 기록했지만 리스폰이 돌면서 한타 마지막에만 순간적으로 RCP가 NYE 쪽으로 기운 경우
+
+
+            '''
         TF_info = pd.DataFrame()
         for section in self.section_list:
             TF_rolling_tmp = TF_rolling.xs(section, level='Section', drop_level=False)
@@ -129,15 +141,15 @@ def TF_detector(df_rolling):
     시작 조건 2. HDD >= {HDD_threshold=500} (time - )
     시작 조건 3. FB > 0, time - {possible_time_variance=1}
     시작 조건 4. HDD >= {HDD_threshold=500} 시간 이후, first FB=False 상태로 HDD < {HDD_lull_cut=50} 생기면 이전 HDD time 제외
+    시작 조건 5. HDD 가 {no_FB_duration} 범위에서 최소값일 경우
 
     <종료 조건>
     종료 조건 0. TF 진행 중 = True
     종료 조건 1. FB = 0 이 {no_FB_duration=10}초 이상
     종료 조건 2. time = ts_map_end_time
-
-    *stagger
-    *길어지는 한타
-    FB 0 되고 10s동안 추가 킬이 없어야 한타 종료로 인정
+    종료 조건 3. FB가 있었어야
+    종료 조건 4. while FB == 0 & HDD <= {HDD_lull_cut}
+    종료 조건 5. 2s 동안 mean(HDD) < HDD_threshold 
 
     return:     TF_timestamps: dataframe of [['match_id', 'map_num', 'TF_start_time_stamps', 'TF_end_time_stamps']]
     '''
@@ -152,7 +164,7 @@ def TF_detector(df_rolling):
     TF_end_time_stamps = []
 
     HDD_threshold = 500
-    HDD_lull_cut = 500
+    HDD_lull_cut = 600
     FB_threshold = 0
     possible_time_variance = 2
     no_FB_duration = 10
@@ -233,7 +245,7 @@ def TF_detector(df_rolling):
 
         def condition1(idx): # FB = 0 이 {no_FB_duration}초 이상 유지될 때
             global FB_silence
-            if df_rolling.loc[idx: idx + no_FB_duration, 'FB'].sum() == 0:
+            if df_rolling.loc[idx : idx + no_FB_duration, 'FB'].sum() == 0:
                 cond1 = True 
                 FB_silence = True # toggle on
             else:
@@ -256,15 +268,15 @@ def TF_detector(df_rolling):
                 cond3 = False
             return cond3
         
-        def condition4(idx): # while FB == 0 & HDD <= {HDD_lull_cut}
-            if (df_rolling.loc[idx, 'FB'] == 0) & (df_rolling.loc[idx, 'HDD'] <= HDD_lull_cut):
+        def condition4(idx): # while FB == 0 for 0~+8 & HDD <= {HDD_lull_cut}
+            if (df_rolling.loc[idx : idx + (no_FB_duration - possible_time_variance), 'FB'].sum() == 0) & (df_rolling.loc[idx, 'HDD'] <= HDD_lull_cut):
                 cond4 = True
             else:
                 cond4 = False
             return cond4
         
         def condition5(idx): # 2s 동안 mean(HDD) < HDD_threshold 
-            if df_rolling.loc[idx:idx + 2, 'HDD'].mean() < HDD_threshold:
+            if df_rolling.loc[idx : idx + possible_time_variance, 'HDD'].mean() < HDD_threshold:
                 cond5 = True
             else:
                 cond5 = False

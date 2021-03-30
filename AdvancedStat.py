@@ -260,7 +260,7 @@ class DIv2(AdvancedStat):
         df_stat['TF_RCP_sum/s'] = df_stat['TF_RCP_sum'].div(df_stat['TF_duration'])
 
         def DominanceIndex(X):
-            DI = X.mean() / X.var()
+            DI = X.mean() / X.std()
             return DI
         
         df_stat['DominanceIndex'] = DominanceIndex(df_stat['TF_RCP_sum/s'])
