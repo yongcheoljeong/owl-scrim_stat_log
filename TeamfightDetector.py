@@ -1,4 +1,5 @@
 import pandas as pd 
+import numpy as np 
 
 class TeamfightDetector():
    
@@ -56,18 +57,34 @@ class TeamfightDetector():
     def set_TF_info(self): 
         TF_rolling = self.roll_df_init()
 
-
-        def TFWinnerDetector():
+        def TFWinnerDetector(TF_rolling_tmp, idx):
             '''
-            TF_RCP_sum 만으로 winner 판단하면 안 되는 예시:
-            (20210325_01, Dorado, 1, TF#3) 처럼 마지막에 급격하게 RCP 변화가 있을 경우 TF 전반적으로 HZS가 유리했더라도 마지막에 NYE가 한타 뒤집어버리는 경우
-            (20210325_01, Temple of Anubis, 2, TF#1) 위와 같은 경우
+                TF_RCP_sum 만으로 winner 판단하면 안 되는 예시:
+                    (20210325_01, Dorado, 1, TF#3) 처럼 마지막에 급격하게 RCP 변화가 있을 경우 TF 전반적으로 HZS가 유리했더라도 마지막에 NYE가 한타 뒤집어버리는 경우
+                    (20210325_01, Temple of Anubis, 2, TF#1) 위와 같은 경우
             그럼 마지막 RCP 높은 쪽으로 승리 팀을 판단하면 되나? 이것도 안됨.
-            마지막 RCP 높은 쪽으로 winner 판단하면 안 되는 예시:
-            (20210325_02, Dorado, 0, TF#4) 처럼 일방적으로 TAL 쪽에서 FB 기록했지만 리스폰이 돌면서 한타 마지막에만 순간적으로 RCP가 NYE 쪽으로 기운 경우
+                마지막 RCP 높은 쪽으로 winner 판단하면 안 되는 예시:
+                    (20210325_02, Dorado, 0, TF#4) 처럼 일방적으로 TAL 쪽에서 FB 기록했지만 리스폰이 돌면서 한타 마지막에만 순간적으로 RCP가 NYE 쪽으로 기운 경우
 
-
+            이를 해결하기 위해 Teamfight 후반부로 갈수록 비중을 높여서 TF_RCP_sum 을 계산 (TF_RCP_weighted_sum). 이게 높은 쪽이 winner.
             '''
+            df_RCP = TF_rolling_tmp.loc[TF_time_range.loc[idx, 'TF_start_time']:TF_time_range.loc[idx, 'TF_end_time'], 'RCP']
+            num_data = len(df_RCP)
+            # linear_weight = np.linspace(0.1, 1, num_data)
+            # sigmoidal_weight = 1/(1 + np.exp(-(np.linspace(-10, 10, num_data))))
+            # softplus_weight = np.log(1 + np.exp(np.linspace(-10, 10, num_data)))
+            exp_weight = np.exp(np.linspace(-1, 1, num_data))
+            TF_RCP_weighted_sum = (df_RCP * exp_weight).sum()
+
+            if TF_RCP_weighted_sum > 0:
+                winner_flag = 1 
+            elif TF_RCP_weighted_sum == 0:
+                winner_flag = 0 
+            else: 
+                winner_flag = -1
+            
+            return winner_flag, TF_RCP_weighted_sum
+
         TF_info = pd.DataFrame()
         for section in self.section_list:
             TF_rolling_tmp = TF_rolling.xs(section, level='Section', drop_level=False)
@@ -80,25 +97,31 @@ class TeamfightDetector():
             TF_winner_list = []
             TF_order_list = []
             TF_duration_list = []
-            TF_RCP_list = []
+            TF_RCP_sum_list = []
+            TF_RCP_weighted_sum_list = []
             TF_order = 0
             
             for idx in TF_time_range.index:
                 TF_order += 1
                 TF_order_list.append(TF_order)
-                TF_duration_list.append((TF_time_range.loc[idx, 'TF_end_time'] - TF_time_range.loc[idx, 'TF_start_time'])) # TF duration in s
-                TF_RCP_sum = TF_rolling_tmp.loc[TF_time_range.loc[idx, 'TF_start_time']:TF_time_range.loc[idx, 'TF_end_time'], 'RCP'].sum()
-                TF_RCP_list.append(TF_RCP_sum) # RCP
-                if TF_RCP_sum > 0:
+                TF_duration = (TF_time_range.loc[idx, 'TF_end_time'] - TF_time_range.loc[idx, 'TF_start_time']) # TF duration in s
+                TF_duration_list.append(TF_duration) 
+                TF_RCP_sum = TF_rolling_tmp.loc[TF_time_range.loc[idx, 'TF_start_time']:TF_time_range.loc[idx, 'TF_end_time'], 'RCP'].sum() # TF_RCP_sum
+                TF_RCP_sum_list.append(TF_RCP_sum)
+                winner_flag, TF_RCP_weighted_sum = TFWinnerDetector(TF_rolling_tmp, idx)
+                TF_RCP_weighted_sum_list.append(TF_RCP_weighted_sum)
+                if winner_flag > 0:
                     TF_winner_list.append(self.team_one_name)
-                elif TF_RCP_sum == 0:
+                elif winner_flag == 0:
                     TF_winner_list.append('draw')
-                else:
+                else: 
                     TF_winner_list.append(self.team_two_name)
+
             TF_time_range['TF_order'] = TF_order_list
             TF_time_range['TF_winner'] = TF_winner_list
             TF_time_range['TF_duration'] = TF_duration_list
-            TF_time_range['TF_RCP_sum'] = TF_RCP_list
+            TF_time_range['TF_RCP_sum'] = TF_RCP_sum_list
+            TF_time_range['TF_RCP_weighted_sum'] = TF_RCP_weighted_sum_list
 
             TF_time_range['MatchId'] = self.MatchId
             TF_time_range['Map'] = self.Map
@@ -122,6 +145,7 @@ class TeamfightDetector():
                 tmp.loc[start:end, 'TF_winner'] = TF_info_tmp.loc[idx, 'TF_winner']
                 tmp.loc[start:end, 'TF_duration'] = TF_info_tmp.loc[idx, 'TF_duration']
                 tmp.loc[start:end, 'TF_RCP_sum'] = TF_info_tmp.loc[idx, 'TF_RCP_sum']
+                tmp.loc[start:end, 'TF_RCP_weighted_sum'] = TF_info_tmp.loc[idx, 'TF_RCP_weighted_sum']
             
             tmp_merge = pd.concat([tmp_merge, tmp])
         
