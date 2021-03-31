@@ -1,6 +1,7 @@
 from abc import *
 import pandas as pd 
 import numpy as np
+import Resources
 
 class AdvancedStat(metaclass=ABCMeta):
     def __init__(self, input_df=None):
@@ -288,13 +289,13 @@ class ResourceCost(AdvancedStat):
         self.stat_level = 'Team'
         self.stat_name = 'ResourceCost'
         self.stat_version = '1.0'
-        self.idx_col = ['MatchId', 'Map', 'Section', 'Team']
+        self.idx_col = ['MatchId', 'Map', 'Section', 'TF_order', 'Timestamp', 'Team']
         self.input_df = input_df
 
     def ready_df_init(self):
         input_df = self.input_df.reset_index()
         
-        requirement_col = ['Cooldown1', 'Cooldown2', 'CooldownSecondaryFire', 'CooldownCrouching', 'UltimateUsed/s', 'MaxHealth']
+        requirement_col = ['Cooldown1', 'Cooldown2', 'CooldownSecondaryFire', 'CooldownCrouching', 'UltimateUsed/s', 'MaxHealth', 'TF_duration']
         ready_col = self.idx_col + requirement_col
         df_init = input_df[ready_col]
 
