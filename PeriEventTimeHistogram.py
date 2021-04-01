@@ -1,58 +1,106 @@
 import pandas as pd 
 import numpy as np 
+import glob
+import os 
 
 class PETH():
-    def __init__(self, df_init=None, event_name=None, period=5):
-        self.df_init = df_init.reset_index()
-        self.period = period 
-        self.event_name = event_name
+    def __init__(self, FinalStatCsvName=None):
+        if FinalStatCsvName is None: 
+            pass 
+        else: 
+            self.FinalStatCsvName = FinalStatCsvName 
+            path_FinalStat = r'G:\공유 드라이브\NYXL Scrim Log\FinalStat'
+            FinalStat = pd.read_csv(os.path.join(path_FinalStat, self.FinalStatCsvName))
+            self.df_init = FinalStat.reset_index()
+            self.set_event_name()
+            self.set_period()
+            self.set_PETH()
 
-    def find_events(self, of=[]):
+    def set_event_name(self, event_name='FinalBlows/s', threshold=1):
+        if event_name is None: 
+            pass 
+        else: 
+            self.event_name = event_name 
+            self.threshold = threshold
+    
+    def set_period(self, period=10):
+        if period is None: 
+            pass 
+        else: 
+            self.period = period 
+
+    def find_events(self):
         threshold = 1
-        event_onsets = self.df_init[self.df_init[self.event_name] >= threshold]
-
-        team_list = event_onsets['Team'].unique()
-        player_list = event_onsets['Player'].unique()
-        hero_list = event_onsets['Hero'].unique()
-
-        if any(list(set(of) & set(team_list))):
-            event_onsets = event_onsets[event_onsets['Team'] == list(set(of) & set(team_list))[0]]
-        if any(list(set(of) & set(player_list))):
-            event_onsets = event_onsets[event_onsets['Player'] == list(set(of) & set(player_list))[0]]
-        if any(list(set(of) & set(hero_list))):
-            event_onsets = event_onsets[event_onsets['Hero'] == list(set(of) & set(hero_list))[0]]
-
-        return event_onsets 
-
-    def set_PETH(self, of=[]):
-        of = of
-        event_onsets = self.find_events(of)
-        section_list = event_onsets['Section'].unique()
+        df_event_onset = self.df_init[self.df_init[self.event_name] >= self.threshold]
         
-        event_aligned = pd.DataFrame()
-        for section in section_list:
-            num_event = 0
-            events_in_section = event_onsets[event_onsets['Section'] == section]
-            df_in_section = self.df_init[self.df_init['Section'] == section].set_index('Timestamp')
-            for event_onset in events_in_section['Timestamp']:
+        return df_event_onset
 
-                event_recorder = df_in_section.loc[(event_onset)-(self.period+1):(event_onset)+(self.period+1)]
-                reindex_timestamp = np.linspace(-self.period, self.period, 2*self.period + 1) # reindex example: [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5]
-                event_recorder = event_recorder.reset_index()
+    def set_PETH(self):
+        df_event_onset = self.find_events()
+        idx_col = ['MatchId', 'Map', 'Section', 'RoundName', 'Team', 'Player', 'Hero', 'Timestamp']
+        df_PETH = pd.DataFrame()
+        for multi_idx, row in df_event_onset.iterrows():
+            # set reference vars
+            ref_match_id = row['MatchId']
+            ref_map_name = row['Map']
+            ref_team_name = row['Team']
+            ref_player_name = row['Player']
+            ref_hero_name = row['Hero']
 
-                # replace Timestamp into '-self.period:self.period' scale
-                event_recorder['Timestamp'] -= event_onset
-                event_recorder['Timestamp'] = event_recorder['Timestamp'].astype(int) # Timestamp 소숫점 자리 버림
-                event_recorder['num_event'] = num_event 
-                num_event += 1
-                event_aligned = pd.concat([event_aligned, event_recorder])
+            # align FinalStat by event onset
+            event_onset = row['Timestamp']
+            df_event_recorder = self.df_init[(self.df_init['Timestamp'] >= (event_onset - (self.period + 1))) & (self.df_init['Timestamp'] <= (event_onset + (self.period + 1)))]
+            df_event_recorder['Timestamp'] -= event_onset
+            df_event_recorder['Timestamp'] = df_event_recorder['Timestamp'].astype(int) # Timestamp 소숫점 자리 버림
+            
+            # reference columns
+            df_event_recorder['ref_Team'] = ref_team_name
+            df_event_recorder['ref_Player'] = ref_player_name
+            df_event_recorder['ref_Hero'] = ref_hero_name
+            df_event_recorder['ref_Event'] = self.event_name
+
+            # concat
+            df_PETH = pd.concat([df_PETH, df_event_recorder], ignore_index=True)
+
+        df_PETH = df_PETH.set_index(['MatchId', 'Map', 'Section', 'RoundName', 'ref_Team', 'ref_Player', 'ref_Hero', 'ref_Event', 'Team', 'Player', 'Hero', 'Timestamp'])
+
+        return df_PETH 
+
+    def get_PETH(self):
+        df_PETH = self.set_PETH()
+
+        return df_PETH
+
+    def export_to_csv(self, save_dir=r'G:\공유 드라이브\NYXL Scrim Log\PETH'):
+        if self.event_name == 'FinalBlows/s':
+            abbr = 'FB'
+
+        self.get_PETH().to_csv(save_dir + f'/PETH_{abbr}_{self.FinalStatCsvName}')
+
+    def update_PETH(self, save_dir=r'G:\공유 드라이브\NYXL Scrim Log\PETH'):
+        # set path
+        filepath = r'G:\공유 드라이브\NYXL Scrim Log\FinalStat'
+        filelist = os.listdir(filepath)
+        csv_filelist = [x for x in filelist if x.endswith('.csv')]
+        # csv_filelist = glob.glob(os.path.join(filepath, 'FinalStat_*.csv'))
+        updated_csv = 'FilesUpdated.txt'
         
-        event_aligned = event_aligned.groupby(by=['MatchId', 'Map', 'Section', 'num_event', 'Timestamp', 'Team', 'Player', 'Hero']).sum()
-        
-        PETH = event_aligned
-        return PETH 
+        # open updated filelist
+        f = open(os.path.join(filepath, updated_csv), 'r+')
+        lines = f.readlines()
+        updated_filelist = []
 
-    def get_PETH(self, of=[]):
-        PETH = self.set_PETH(of=of)
+        for line in lines:
+            updated_filelist.append(line.replace('\n', ''))
 
-        return PETH
+        # sort files to be updated
+        csv_filelist_to_export = list(set(csv_filelist) - set(updated_filelist))
+
+        # export to csv in PETH folder
+        for filename in csv_filelist_to_export:
+            PETH(filename).export_to_csv()
+
+            f.write(filename+'\n')
+            print(f'File Exported: {filename}')
+
+        f.close()
