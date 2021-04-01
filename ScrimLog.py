@@ -8,16 +8,19 @@ from PeriEventTimeHistogram import *
 
 class ScrimLog():
     def __init__(self, csvname=None):
-        self.csvname = csvname
-        self.match_id = csvname[0:11] # match_id: '(yyyymmdd)_(scrimNum)' (e.g. 20200318_02)
-        self.set_directory()
-        self.set_df_input()
-        self.set_index()
-        self.set_WorkshopStat()
-        self.set_TraditionalStat()
-        self.set_AdvancedStat()
-        self.set_TeamfightDetector()
-        self.set_FinalStatIndex()
+        if csvname is None:
+            pass 
+        else:
+            self.csvname = csvname
+            self.match_id = csvname[0:11] # match_id: '(yyyymmdd)_(scrimNum)' (e.g. 20200318_02)
+            self.set_directory()
+            self.set_df_input()
+            self.set_index()
+            self.set_WorkshopStat()
+            self.set_TraditionalStat()
+            self.set_AdvancedStat()
+            self.set_TeamfightDetector()
+            self.set_FinalStatIndex()
 
     def set_directory(self):
         '''
@@ -96,7 +99,6 @@ class ScrimLog():
         def diff_stat(df_input=None):
             diff_stat_list = [] # define stat names to diff()
             df_init = df_input.reset_index()
-            # grouping = [x for x in self.idx_col if x != 'Hero']
             grouping = [x for x in self.idx_col if x not in ['Hero', 'Point']]
             hero_col = df_init.set_index(grouping)['Hero']
             df_group = df_init.groupby(by=grouping).sum()
@@ -152,3 +154,29 @@ class ScrimLog():
     def export_to_csv(self, save_dir='G:/공유 드라이브/NYXL Scrim Log/FinalStat/'):
         self.df_FinalStat.to_csv(save_dir + f'FinalStat_{self.csvname}')
     
+    def update_FinalStat(self, save_dir='G:/공유 드라이브/NYXL Scrim Log/FinalStat/'):
+        # set path
+        filepath = 'G:/공유 드라이브/NYXL Scrim Log/Csv/'
+        filelist = os.listdir(filepath)
+        csv_filelist = [x for x in filelist if x.endswith('.csv')]
+        updated_csv = 'FilesUpdated.txt'
+        
+        # open updated filelist
+        f = open(filepath + updated_csv, 'r+')
+        lines = f.readlines()
+        updated_filelist = []
+
+        for line in lines:
+            updated_filelist.append(line.replace('\n', ''))
+
+        # sort files to be updated
+        csv_filelist_to_export = list(set(csv_filelist) - set(updated_filelist))
+
+        # export to csv in FinalStat folder
+        for filename in csv_filelist_to_export:
+            ScrimLog(filename).export_to_csv()
+
+            f.write(filename+'\n')
+            print(f'File Exported: {filename}')
+
+        f.close()
