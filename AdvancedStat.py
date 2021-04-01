@@ -289,40 +289,45 @@ class ResourceCost(AdvancedStat):
         self.stat_level = 'Team'
         self.stat_name = 'ResourceCost'
         self.stat_version = '1.0'
-        self.idx_col = ['MatchId', 'Map', 'Section', 'TF_order', 'Timestamp', 'Team']
+        self.idx_col = ['MatchId', 'Map', 'Section', 'TF_order', 'Team', 'Hero']
         self.input_df = input_df
 
     def ready_df_init(self):
         input_df = self.input_df.reset_index()
         
-        requirement_col = ['Cooldown1', 'Cooldown2', 'CooldownSecondaryFire', 'CooldownCrouching', 'UltimateUsed/s', 'MaxHealth', 'TF_duration']
-        ready_col = self.idx_col + requirement_col
+        tmp_col_for_songhana = ['Timestamp', 'MaxHealth']
+        requirement_col = ['Cooldown1', 'Cooldown2', 'CooldownSecondaryFire', 'CooldownCrouching', 'UltimateUsed/s', 'TF_duration']
+        ready_col = self.idx_col + tmp_col_for_songhana + requirement_col
         df_init = input_df[ready_col]
 
         return df_init
     
     def define_df_stat(self):
         df_init = self.ready_df_init()
-        '''
-        D.Va MaxHealth == 150 일 때 UltimateUsed/s 카운트 하지 않음. 
-        '''
+
+        # Drop HongHana Rows, D.Va MaxHealth == 150 일 때 UltimateUsed/s 카운트 하지 않음. 
+        songhana_rows = df_init[(df_init['Hero'] == 'D.Va') & (df_init['MaxHealth'] == 150)]
+        df_init.drop(songhana_rows.index, inplace=True)
         # df_stat here
-        df_stat = df_init.groupby(by=self.idx_col).max()
+        df_stat = df_init.groupby(by=self.idx_col).sum()
 
         def AbilityCost(sum_Cooldown):
             # ability cost here
             Cooldown = (-1 + (1 + 8*sum_Cooldown)^(1/2) / 2)
             return Cooldown
         
-        def UltimateCost(df):
+        def UltimateCost(df_stat):
             # ultimate cost here
             UC_dict = Resources.UltimateCost
-            UU = df['UltimateUsed/s'].sum()
-            hero_name = df['Hero'].unique()
+            UU = df_stat['UltimateUsed/s'].sum()
+            hero_name = df_stat['Hero'].unique()
             ultimate_cost = UC_dict(key=hero_name) / 5 * UU
 
             return ultimate_cost
         
+        df_stat['AbilityCost'] = AbilityCost(df_stat['Cooldown1'] + df_stat['Cooldown2'] + df_stat['CooldownSecondaryFire'] + df_stat['CooldownCrouching'])
+        df_stat['UltimateCost'] = UltimateCost(df_stat)
+
         return df_stat
     
     def merge_df_result(self):

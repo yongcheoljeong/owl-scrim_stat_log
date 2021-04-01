@@ -74,6 +74,8 @@ class ScrimLog():
         df_TraditionalStat = TimePlayed(self.df_WorkshopStat).get_df_result()
         # AllDamageDealt
         df_TraditionalStat = AllDamageDealt(df_TraditionalStat).get_df_result()
+        # HealingReceived
+        df_TraditionalStat = HealingReceived(df_TraditionalStat).get_df_result()
         # Cooldown1Percent
         df_TraditionalStat = Cooldown1Percent(df_TraditionalStat).get_df_result()
         # Cooldown2Percent

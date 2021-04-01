@@ -110,6 +110,48 @@ class AllDamageDealt(TraditionalStat):
         df_result = self.merge_df_result()
         return df_result
 
+class HealingReceived(TraditionalStat):
+    '''
+    Workshop 에서 HealingReceived가 다른 스탯과는 달리 Player 기준이 아니라 Hero 기반으로만 누적되기 떄문에 preprocessing 필요. 
+    기존 문제는 Hero가 바뀔 때마다 HealingReceived가 0으로 reset되며 차후 dx 계산 때 (-)값이 나오게 됨.
+    Player 기준으로 cumulative 될 수 있도록 TraditionalStat level에서 수정.
+    '''
+    def __init__(self, input_df=None):
+        self.stat_level = 'Player'
+        self.stat_name = 'HealingReceived'
+        self.input_df = input_df
+        self.idx_col = ['MatchId', 'Map', 'Section', 'Timestamp', 'Team', 'Player', 'Hero']
+
+    def ready_df_init(self):
+        input_df = self.input_df.reset_index()
+        
+        requirement_col = ['HealingReceived']
+        ready_col = self.idx_col + requirement_col
+        df_init = input_df[ready_col]
+
+        return df_init
+    
+    def define_df_stat(self):
+        df_init = self.ready_df_init()
+
+        df_stat = df_init.groupby(by=self.idx_col).sum().groupby([x for x in self.idx_col if x != 'Timestamp']).diff().fillna(0).groupby(level='Player').cumsum().reset_index()
+
+        return df_stat
+    
+    def merge_df_result(self):
+        df_stat = self.define_df_stat()
+        
+        df_stat_g = df_stat.groupby(by=self.idx_col).sum()
+        df_result = pd.merge(self.input_df, df_stat_g, how='outer', left_index=True, right_index=True)
+        df_result.drop(columns='HealingReceived_x', inplace=True)
+        df_result.rename(columns={'HealingReceived_y':f'{self.stat_name}'}, inplace=True)
+
+        return df_result
+    
+    def get_df_result(self):
+        df_result = self.merge_df_result()
+        return df_result
+
 class Cooldown1Percent(TraditionalStat):
     def __init__(self, input_df=None):
         self.stat_level = 'Hero'
