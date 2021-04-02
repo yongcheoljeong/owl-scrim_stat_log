@@ -15,7 +15,6 @@ class PETH():
             path_FinalStat = r'G:\공유 드라이브\NYXL Scrim Log\FinalStat'
             FinalStat = pd.read_csv(os.path.join(path_FinalStat, self.FinalStatCsvName))
             self.df_init = FinalStat.reset_index()
-            self.set_PETH()
 
     def set_search_condition(self, event_name='FinalBlows/s', threshold=1):
         if event_name is None: 
@@ -23,7 +22,8 @@ class PETH():
         else: 
             self.event_name = event_name 
             self.threshold = threshold
-    
+            self.stat_name_abbr = StatAbbr[self.event_name] # Abbreviation of event_name
+
     def set_period(self, period=10):
         if period is None: 
             pass 
@@ -73,9 +73,7 @@ class PETH():
 
     def export_to_csv(self, save_dir=r'G:\공유 드라이브\NYXL Scrim Log\PETH'):
         # Transform event_name to Abbr
-        abbr = StatAbbr[self.event_name]
-
-        self.get_PETH().to_csv(save_dir + f'/PETH_{abbr}_{self.FinalStatCsvName}')
+        self.get_PETH().to_csv(save_dir + f'/PETH_{self.stat_name_abbr}_{self.FinalStatCsvName}')
 
     def update_PETH(self, save_dir=r'G:\공유 드라이브\NYXL Scrim Log\PETH'):
         # set path
@@ -83,7 +81,7 @@ class PETH():
         filelist = os.listdir(filepath)
         csv_filelist = [x for x in filelist if x.endswith('.csv')]
         # csv_filelist = glob.glob(os.path.join(filepath, 'FinalStat_*.csv'))
-        updated_csv = 'FilesUpdated.txt'
+        updated_csv = f'FilesUpdated_{self.stat_name_abbr}.txt'
         
         # open updated filelist
         f = open(os.path.join(filepath, updated_csv), 'r+')
@@ -98,7 +96,9 @@ class PETH():
 
         # export to csv in PETH folder
         for filename in csv_filelist_to_export:
-            PETH(filename).export_to_csv()
+            file_PETH = PETH(filename)
+            file_PETH.set_search_condition(event_name=self.event_name, threshold=self.threshold)
+            file_PETH.export_to_csv()
 
             f.write(filename+'\n')
             print(f'File Exported: {filename}')
