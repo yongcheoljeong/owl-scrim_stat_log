@@ -2,9 +2,12 @@ import pandas as pd
 import numpy as np 
 import glob
 import os 
+from StatAbbr import *
 
 class PETH():
     def __init__(self, FinalStatCsvName=None):
+        self.set_search_condition()
+        self.set_period()
         if FinalStatCsvName is None: 
             pass 
         else: 
@@ -12,11 +15,9 @@ class PETH():
             path_FinalStat = r'G:\공유 드라이브\NYXL Scrim Log\FinalStat'
             FinalStat = pd.read_csv(os.path.join(path_FinalStat, self.FinalStatCsvName))
             self.df_init = FinalStat.reset_index()
-            self.set_event_name()
-            self.set_period()
             self.set_PETH()
 
-    def set_event_name(self, event_name='FinalBlows/s', threshold=1):
+    def set_search_condition(self, event_name='FinalBlows/s', threshold=1):
         if event_name is None: 
             pass 
         else: 
@@ -30,7 +31,6 @@ class PETH():
             self.period = period 
 
     def find_events(self):
-        threshold = 1
         df_event_onset = self.df_init[self.df_init[self.event_name] >= self.threshold]
         
         return df_event_onset
@@ -72,8 +72,8 @@ class PETH():
         return df_PETH
 
     def export_to_csv(self, save_dir=r'G:\공유 드라이브\NYXL Scrim Log\PETH'):
-        if self.event_name == 'FinalBlows/s':
-            abbr = 'FB'
+        # Transform event_name to Abbr
+        abbr = StatAbbr[self.event_name]
 
         self.get_PETH().to_csv(save_dir + f'/PETH_{abbr}_{self.FinalStatCsvName}')
 
