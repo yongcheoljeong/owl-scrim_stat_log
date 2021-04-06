@@ -39,7 +39,9 @@ class PETH():
         df_event_onset = self.find_events()
         idx_col = ['MatchId', 'Map', 'Section', 'RoundName', 'Team', 'Player', 'Hero', 'Timestamp']
         df_PETH = pd.DataFrame()
+        num_Event = 0
         for multi_idx, row in df_event_onset.iterrows():
+            num_Event += 1
             # set reference vars
             ref_match_id = row['MatchId']
             ref_map_name = row['Map']
@@ -58,11 +60,13 @@ class PETH():
             df_event_recorder['ref_Player'] = ref_player_name
             df_event_recorder['ref_Hero'] = ref_hero_name
             df_event_recorder['ref_Event'] = self.event_name
+            df_event_recorder['num_Event'] = num_Event 
+
 
             # concat
             df_PETH = pd.concat([df_PETH, df_event_recorder], ignore_index=True)
 
-        df_PETH = df_PETH.set_index(['MatchId', 'Map', 'Section', 'RoundName', 'ref_Team', 'ref_Player', 'ref_Hero', 'ref_Event', 'Team', 'Player', 'Hero', 'Timestamp'])
+        df_PETH = df_PETH.set_index(['MatchId', 'Map', 'Section', 'RoundName', 'num_Event', 'ref_Team', 'ref_Player', 'ref_Hero', 'ref_Event', 'Team', 'Player', 'Hero', 'Timestamp'])
 
         return df_PETH 
 
