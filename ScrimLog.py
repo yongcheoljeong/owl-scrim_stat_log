@@ -170,7 +170,8 @@ class ScrimLog():
             updated_filelist.append(line.replace('\n', ''))
 
         # sort files to be updated
-        csv_filelist_to_export = list(set(csv_filelist) - set(updated_filelist)).sort()
+        csv_filelist_to_export = list(set(csv_filelist) - set(updated_filelist))
+        csv_filelist_to_export.sort()
 
         # export to csv in FinalStat folder
         for filename in csv_filelist_to_export:

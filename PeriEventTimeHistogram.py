@@ -37,36 +37,40 @@ class PETH():
 
     def set_PETH(self):
         df_event_onset = self.find_events()
-        idx_col = ['MatchId', 'Map', 'Section', 'RoundName', 'Team', 'Player', 'Hero', 'Timestamp']
-        df_PETH = pd.DataFrame()
-        num_Event = 0
-        for multi_idx, row in df_event_onset.iterrows():
-            num_Event += 1
-            # set reference vars
-            ref_match_id = row['MatchId']
-            ref_map_name = row['Map']
-            ref_team_name = row['Team']
-            ref_player_name = row['Player']
-            ref_hero_name = row['Hero']
+        
+        if len(df_event_onset) == 0:
+            df_PETH = pd.DataFrame({'MatchId':[], 'Map':[], 'Section':[], 'RoundName':[], 'num_Event':[], 'ref_Team':[], 'ref_Player':[], 'ref_Hero':[], 'ref_Event':[], 'Team':[], 'Player':[], 'Hero':[], 'Timestamp':[]})
+        else:
+            idx_col = ['MatchId', 'Map', 'Section', 'RoundName', 'Team', 'Player', 'Hero', 'Timestamp']
+            df_PETH = pd.DataFrame()
+            num_Event = 0
+            for multi_idx, row in df_event_onset.iterrows():
+                num_Event += 1
+                # set reference vars
+                ref_match_id = row['MatchId']
+                ref_map_name = row['Map']
+                ref_team_name = row['Team']
+                ref_player_name = row['Player']
+                ref_hero_name = row['Hero']
 
-            # align FinalStat by event onset
-            event_onset = row['Timestamp']
-            df_event_recorder = self.df_init[(self.df_init['Timestamp'] >= (event_onset - (self.period + 1))) & (self.df_init['Timestamp'] <= (event_onset + (self.period + 1)))]
-            df_event_recorder['Timestamp'] -= event_onset
-            df_event_recorder['Timestamp'] = df_event_recorder['Timestamp'].astype(int) # Timestamp 소숫점 자리 버림
-            
-            # reference columns
-            df_event_recorder['ref_Team'] = ref_team_name
-            df_event_recorder['ref_Player'] = ref_player_name
-            df_event_recorder['ref_Hero'] = ref_hero_name
-            df_event_recorder['ref_Event'] = self.event_name
-            df_event_recorder['num_Event'] = num_Event 
+                # align FinalStat by event onset
+                event_onset = row['Timestamp']
+                df_event_recorder = self.df_init[(self.df_init['Timestamp'] >= (event_onset - (self.period + 1))) & (self.df_init['Timestamp'] <= (event_onset + (self.period + 1)))]
+                df_event_recorder['Timestamp'] -= event_onset
+                df_event_recorder['Timestamp'] = df_event_recorder['Timestamp'].astype(int) # Timestamp 소숫점 자리 버림
+                
+                # reference columns
+                df_event_recorder['ref_Team'] = ref_team_name
+                df_event_recorder['ref_Player'] = ref_player_name
+                df_event_recorder['ref_Hero'] = ref_hero_name
+                df_event_recorder['ref_Event'] = self.event_name
+                df_event_recorder['num_Event'] = num_Event 
 
 
-            # concat
-            df_PETH = pd.concat([df_PETH, df_event_recorder], ignore_index=True)
+                # concat
+                df_PETH = pd.concat([df_PETH, df_event_recorder], ignore_index=True)
 
-        df_PETH = df_PETH.set_index(['MatchId', 'Map', 'Section', 'RoundName', 'num_Event', 'ref_Team', 'ref_Player', 'ref_Hero', 'ref_Event', 'Team', 'Player', 'Hero', 'Timestamp'])
+            df_PETH = df_PETH.set_index(['MatchId', 'Map', 'Section', 'RoundName', 'num_Event', 'ref_Team', 'ref_Player', 'ref_Hero', 'ref_Event', 'Team', 'Player', 'Hero', 'Timestamp'])
 
         return df_PETH 
 
@@ -96,7 +100,8 @@ class PETH():
             updated_filelist.append(line.replace('\n', ''))
 
         # sort files to be updated
-        csv_filelist_to_export = list(set(csv_filelist) - set(updated_filelist)).sort()
+        csv_filelist_to_export = list(set(csv_filelist) - set(updated_filelist))
+        csv_filelist_to_export.sort()
 
         # export to csv in PETH folder
         for filename in csv_filelist_to_export:
