@@ -154,12 +154,12 @@ class ScrimLog():
     def export_to_csv(self, save_dir='G:/공유 드라이브/NYXL Scrim Log/FinalStat/'):
         self.df_FinalStat.to_csv(save_dir + f'FinalStat_{self.csvname}')
     
-    def update_FinalStat(self, save_dir='G:/공유 드라이브/NYXL Scrim Log/FinalStat/'):
+    def update_FinalStat(self, save_dir=r'G:\공유 드라이브\NYXL Scrim Log\FinalStat/'):
         # set path
-        filepath = 'G:/공유 드라이브/NYXL Scrim Log/Csv/'
+        filepath = r'G:/공유 드라이브/NYXL Scrim Log/Csv/'
         filelist = os.listdir(filepath)
         csv_filelist = [x for x in filelist if x.endswith('.csv')]
-        updated_csv = 'FilesUpdated.txt'
+        updated_csv = 'FilesUpdated_FinalStat.txt'
         
         # open updated filelist
         f = open(filepath + updated_csv, 'r+')
@@ -170,7 +170,7 @@ class ScrimLog():
             updated_filelist.append(line.replace('\n', ''))
 
         # sort files to be updated
-        csv_filelist_to_export = list(set(csv_filelist) - set(updated_filelist))
+        csv_filelist_to_export = list(set(csv_filelist) - set(updated_filelist)).sort()
 
         # export to csv in FinalStat folder
         for filename in csv_filelist_to_export:
