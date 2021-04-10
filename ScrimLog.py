@@ -5,6 +5,7 @@ from TraditionalStat import *
 from AdvancedStat import * 
 from TeamfightDetector import *
 from PeriEventTimeHistogram import *
+from MySQLConnection import *
 
 class ScrimLog():
     def __init__(self, csvname=None):
@@ -154,7 +155,7 @@ class ScrimLog():
     def export_to_csv(self, save_dir='G:/공유 드라이브/NYXL Scrim Log/FinalStat/'):
         self.df_FinalStat.to_csv(save_dir + f'FinalStat_{self.csvname}')
     
-    def update_FinalStat(self, save_dir=r'G:\공유 드라이브\NYXL Scrim Log\FinalStat/'):
+    def update_FinalStat_to_csv(self, save_dir=r'G:\공유 드라이브\NYXL Scrim Log\FinalStat/'):
         # set path
         filepath = r'G:/공유 드라이브/NYXL Scrim Log/Csv/'
         filelist = os.listdir(filepath)
@@ -170,14 +171,44 @@ class ScrimLog():
             updated_filelist.append(line.replace('\n', ''))
 
         # sort files to be updated
-        csv_filelist_to_export = list(set(csv_filelist) - set(updated_filelist))
-        csv_filelist_to_export.sort()
+        csv_filelist_to_update = list(set(csv_filelist) - set(updated_filelist))
+        csv_filelist_to_update.sort()
 
         # export to csv in FinalStat folder
-        for filename in csv_filelist_to_export:
+        for filename in csv_filelist_to_update:
             ScrimLog(filename).export_to_csv()
 
             f.write(filename+'\n')
             print(f'File Exported: {filename}')
 
+        f.close()
+
+    def update_FinalStat_to_sql(self):
+        # set path
+        filepath = r'G:/공유 드라이브/NYXL Scrim Log/Csv/'
+        filelist = os.listdir(filepath)
+        csv_filelist = [x for x in filelist if x.endswith('.csv')]
+        updated_csv = 'FilesUpdated_FinalStat_MySQL.txt'
+        
+        # open updated filelist
+        f = open(os.path.join(filepath, updated_csv), 'r+')
+        lines = f.readlines()
+        updated_filelist = []
+
+        for line in lines:
+            updated_filelist.append(line.replace('\n', ''))
+
+        # sort files to be updated
+        csv_filelist_to_update = list(set(csv_filelist) - set(updated_filelist))
+        csv_filelist_to_update.sort()
+
+        # export to csv in FinalStat folder
+        for filename in csv_filelist_to_update:
+            scrimlog = ScrimLog(filename)
+            df_sql = MySQLConnection(input_df=scrimlog.df_FinalStat.reset_index(), dbname='scrim_finalstat') # reset_index to export to mysql db
+            table_name = scrimlog.csvname.split('.csv')[0] # drop '.csv' as a table_name
+            df_sql.export_to_db(table_name=table_name, if_exists='replace')
+
+            f.write(filename+'\n')
+            print(f'File Exported to {df_sql.dbname}: {filename}')
         f.close()

@@ -88,7 +88,8 @@ class AllDamageDealt(TraditionalStat):
         df_stat = pd.DataFrame()
         for stat_level in stat_level_list:
             stat_level_col = df_init[df_init[f'{self.stat_level}'] == stat_level]
-            
+            stat_level_col = stat_level_col.copy() # make a copy to get rid of SetWithCopy Warning
+
             stat_level_col['new_col'] = stat_level_col['HeroDamageDealt'] + stat_level_col['BarrierDamageDealt']
             stat_level_col.rename(columns={'new_col':f'{self.stat_name}'}, inplace=True)
 
@@ -177,6 +178,8 @@ class Cooldown1Percent(TraditionalStat):
         df_stat = pd.DataFrame()
         for hero in hero_list:
             hero_col = df_init[df_init['Hero'] == hero]
+            hero_col = hero_col.copy() # make a copy to get rid of SetWithCopy Warning
+
             max_cooldown = hero_col['Cooldown1'].max().max()
             if max_cooldown == 0:
                 max_cooldown = 1
@@ -226,6 +229,8 @@ class Cooldown2Percent(TraditionalStat):
         df_stat = pd.DataFrame()
         for hero in hero_list:
             hero_col = df_init[df_init['Hero'] == hero]
+            hero_col = hero_col.copy() # make a copy to get rid of SetWithCopy Warning
+
             max_cooldown = hero_col['Cooldown2'].max().max()
             if max_cooldown == 0:
                 max_cooldown = 1
@@ -275,6 +280,8 @@ class CooldownSecondaryFirePercent(TraditionalStat):
         df_stat = pd.DataFrame()
         for hero in hero_list:
             hero_col = df_init[df_init['Hero'] == hero]
+            hero_col = hero_col.copy() # make a copy to get rid of SetWithCopy Warning
+
             max_cooldown = hero_col['CooldownSecondaryFire'].max().max()
             if max_cooldown == 0:
                 max_cooldown = 1
@@ -324,6 +331,7 @@ class CooldownCrouchingPercent(TraditionalStat):
         df_stat = pd.DataFrame()
         for hero in hero_list:
             hero_col = df_init[df_init['Hero'] == hero]
+            hero_col = hero_col.copy() # make a copy to get rid of SetWithCopy Warning
             max_cooldown = hero_col['CooldownCrouching'].max().max()
             if max_cooldown == 0:
                 max_cooldown = 1
@@ -373,6 +381,7 @@ class HealthPercent(TraditionalStat):
         df_stat = pd.DataFrame()
         for hero in hero_list:
             hero_col = df_init[df_init['Hero'] == hero]
+            hero_col = hero_col.copy() # make a copy to get rid of SetWithCopy Warning
             max_health = hero_col.loc[min(hero_col.index),'Health']
             hero_col['new_col'] = hero_col['Health'] / max_health
             hero_col.rename(columns={'new_col':f'{self.stat_name}'}, inplace=True)

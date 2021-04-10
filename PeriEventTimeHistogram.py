@@ -3,6 +3,7 @@ import numpy as np
 import glob
 import os 
 from StatAbbr import *
+from MySQLConnection import *
 
 class PETH():
     def __init__(self, FinalStatCsvName=None):
@@ -44,6 +45,7 @@ class PETH():
             idx_col = ['MatchId', 'Map', 'Section', 'RoundName', 'Team', 'Player', 'Hero', 'Timestamp']
             df_PETH = pd.DataFrame()
             num_Event = 0
+            df_event_onset = df_event_onset.copy() # transform to a copy to erase the SettingWithCopyWarning
             for multi_idx, row in df_event_onset.iterrows():
                 num_Event += 1
                 # set reference vars
@@ -88,7 +90,6 @@ class PETH():
         filepath = r'G:\공유 드라이브\NYXL Scrim Log\FinalStat'
         filelist = os.listdir(filepath)
         csv_filelist = [x for x in filelist if x.endswith('.csv')]
-        # csv_filelist = glob.glob(os.path.join(filepath, 'FinalStat_*.csv'))
         updated_csv = f'FilesUpdated_{self.stat_name_abbr}.txt'
         
         # open updated filelist
@@ -100,11 +101,11 @@ class PETH():
             updated_filelist.append(line.replace('\n', ''))
 
         # sort files to be updated
-        csv_filelist_to_export = list(set(csv_filelist) - set(updated_filelist))
-        csv_filelist_to_export.sort()
+        csv_filelist_to_update = list(set(csv_filelist) - set(updated_filelist))
+        csv_filelist_to_update.sort()
 
         # export to csv in PETH folder
-        for filename in csv_filelist_to_export:
+        for filename in csv_filelist_to_update:
             file_PETH = PETH(filename)
             file_PETH.set_search_condition(event_name=self.event_name, threshold=self.threshold)
             file_PETH.export_to_csv()
@@ -112,4 +113,36 @@ class PETH():
             f.write(filename+'\n')
             print(f'File Exported: {filename}')
 
+        f.close()
+    
+    def update_PETH_to_sql(self):
+        # set path
+        filepath = r'G:\공유 드라이브\NYXL Scrim Log\FinalStat'
+        filelist = os.listdir(filepath)
+        csv_filelist = [x for x in filelist if x.endswith('.csv')]
+        updated_csv = f'FilesUpdated_{self.stat_name_abbr}_MySQL.txt'
+        
+        # open updated filelist
+        f = open(os.path.join(filepath, updated_csv), 'r+')
+        lines = f.readlines()
+        updated_filelist = []
+
+        for line in lines:
+            updated_filelist.append(line.replace('\n', ''))
+
+        # sort files to be updated
+        csv_filelist_to_update = list(set(csv_filelist) - set(updated_filelist))
+        csv_filelist_to_update.sort()
+
+        # export to csv in FinalStat folder
+        for filename in csv_filelist_to_update:
+            file_PETH = PETH(filename)
+            file_PETH.set_search_condition(event_name=self.event_name, threshold=self.threshold)
+            input_PETH = file_PETH.get_PETH()
+            df_sql = MySQLConnection(input_df=input_PETH.reset_index(), dbname='scrim_peth') # reset_index to export to mysql db
+            table_name = file_PETH.FinalStatCsvName.split('.csv')[0].split('FinalStat_')[1] # drop '.csv' and 'FinalStat_' as a table_name
+            df_sql.export_to_db(table_name=f'{table_name}_{file_PETH.stat_name_abbr}', if_exists='replace')
+
+            f.write(filename+'\n')
+            print(f'File Exported to {df_sql.dbname}: {filename}')
         f.close()
