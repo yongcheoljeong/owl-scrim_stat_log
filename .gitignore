@@ -3,6 +3,7 @@
 *.mp4
 *.csv
 *.pptx
+mysql_auth.py
 
 ## ignore folder
 data/

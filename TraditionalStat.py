@@ -426,7 +426,7 @@ class NumAlive(TraditionalStat):
 
         # NumAlive of each team
         df_player_alive = df_init.groupby(by=[x for x in self.idx_col if x not in ['Hero']]).mean()
-        df_player_alive[df_player_alive['IsAlive'] < 1]['IsAlive'] = 0 # replace to 0 if IsAlive < 1. This is required where a player change hero in one second.
+        df_player_alive.loc[df_player_alive['IsAlive']<1, 'IsAlive'] = 0 # replace to 0 if IsAlive < 1. This is required where a player change hero in one second.
         df_stat = df_player_alive.groupby(by=[x for x in self.idx_col if x not in ['Player', 'Hero']]).sum()
 
         df_stat.rename(columns={'IsAlive':f'{self.stat_name}'}, inplace=True)
