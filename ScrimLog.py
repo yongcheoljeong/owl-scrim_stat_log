@@ -184,25 +184,40 @@ class ScrimLog():
         f.close()
 
     def update_FinalStat_to_sql(self):
-        # set path
-        filepath = r'G:/공유 드라이브/NYXL Scrim Log/Csv/'
-        filelist = os.listdir(filepath)
-        csv_filelist = [x for x in filelist if x.endswith('.csv')]
-        updated_csv = 'FilesUpdated_FinalStat_MySQL.txt'
-        
-        # open updated filelist
-        f = open(os.path.join(filepath, updated_csv), 'r+')
-        lines = f.readlines()
-        updated_filelist = []
 
-        for line in lines:
-            updated_filelist.append(line.replace('\n', ''))
+        def get_filelist_all(): 
+            # set path
+            filepath = r'G:/공유 드라이브/NYXL Scrim Log/Csv/'
+            filelist = os.listdir(filepath)
+            csv_filelist = [x for x in filelist if x.endswith('.csv')]
+
+            return csv_filelist
+            
+        def get_filelist_updated():
+            filepath = r'G:/공유 드라이브/NYXL Scrim Log/Csv/'
+            updated_csv = 'FilesUpdated_FinalStat_MySQL.txt'
+            f = open(os.path.join(filepath, updated_csv), 'r+')
+            lines = f.readlines()
+            updated_filelist = []
+
+            for line in lines:
+                updated_filelist.append(line.replace('\n', ''))
+            
+            f.close()
+            
+            return updated_filelist
+
+        csv_filelist = get_filelist_all() # all filelist
+        updated_filelist = get_filelist_updated() # updated filelist
 
         # sort files to be updated
         csv_filelist_to_update = list(set(csv_filelist) - set(updated_filelist))
         csv_filelist_to_update.sort()
 
-        # export to csv in FinalStat folder
+        # export and write
+        filepath = r'G:/공유 드라이브/NYXL Scrim Log/Csv/'
+        updated_csv = 'FilesUpdated_FinalStat_MySQL.txt'
+        f = open(os.path.join(filepath, updated_csv), 'a')
         for filename in csv_filelist_to_update:
             scrimlog = ScrimLog(filename)
             df_sql = MySQLConnection(input_df=scrimlog.df_FinalStat.reset_index(), dbname='scrim_finalstat') # reset_index to export to mysql db
