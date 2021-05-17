@@ -147,11 +147,11 @@ class ScrimLog():
         df_FinalStat = df_FinalStat.groupby(by=self.idx_col).max()
         # add Text-based columns
         text_based_col = ['Position', 'DeathByHero', 'DeathByAbility', 'DeathByPlayer', 'Resurrected', 'DuplicatedHero', 'DuplicateStatus']
+
         df_text_based_stats = self.df_WorkshopStat[text_based_col]
         df_FinalStat = pd.merge(df_FinalStat, df_text_based_stats, left_index=True, right_index=True)
 
         self.df_FinalStat = df_FinalStat
-
 
     def get_df_FinalStat(self):
         return self.df_FinalStat
