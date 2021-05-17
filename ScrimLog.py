@@ -68,7 +68,7 @@ class ScrimLog():
         self.idx_col = ['MatchId', 'Map', 'Section', 'Timestamp', 'Team', 'RoundName', 'Point', 'Player', 'Hero']
     
     def set_WorkshopStat(self):
-        df_WorkshopStat = self.df_init.groupby(self.idx_col).sum()
+        df_WorkshopStat = self.df_init.set_index(self.idx_col)
 
         self.df_WorkshopStat = df_WorkshopStat
     
@@ -113,7 +113,7 @@ class ScrimLog():
         df_TraditionalStat = diff_stat(df_input=df_TraditionalStat)
 
         # indexing
-        df_TraditionalStat = df_TraditionalStat.groupby(by=self.idx_col).sum()
+        df_TraditionalStat = df_TraditionalStat.groupby(by=self.idx_col).max()
 
         self.df_TraditionalStat = df_TraditionalStat
 
@@ -127,7 +127,7 @@ class ScrimLog():
         # New AdvancedStat here
 
         # indexing
-        df_AdvancedStat = df_AdvancedStat.groupby(by=self.idx_col).sum()
+        df_AdvancedStat = df_AdvancedStat.groupby(by=self.idx_col).max()
 
         self.df_AdvancedStat = df_AdvancedStat
     
@@ -144,7 +144,14 @@ class ScrimLog():
     
     def set_FinalStatIndex(self):
         df_FinalStat = self.df_TFStat.reset_index()
-        self.df_FinalStat = df_FinalStat.groupby(by=self.idx_col).max()
+        df_FinalStat = df_FinalStat.groupby(by=self.idx_col).max()
+        # add Text-based columns
+        text_based_col = ['Position', 'DeathByHero', 'DeathByAbility', 'DeathByPlayer', 'Resurrected', 'DuplicatedHero', 'DuplicateStatus']
+        df_text_based_stats = self.df_WorkshopStat[text_based_col]
+        df_FinalStat = pd.merge(df_FinalStat, df_text_based_stats, left_index=True, right_index=True)
+
+        self.df_FinalStat = df_FinalStat
+
 
     def get_df_FinalStat(self):
         return self.df_FinalStat
