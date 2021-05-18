@@ -150,6 +150,15 @@ class ScrimLog():
 
         df_text_based_stats = self.df_WorkshopStat[text_based_col]
         df_FinalStat = pd.merge(df_FinalStat, df_text_based_stats, left_index=True, right_index=True)
+        # Echo Duplicate
+        def EchoDuplicate(df_FinalStat):
+            F_Duplicating = df_FinalStat[['DuplicateStatus']].replace('DUPLICATING', 1).fillna(0)
+            F_Duplicating.rename(columns={'DuplicateStatus':'IsEchoUlt'}, inplace=True)
+            IsEchoUlt = F_Duplicating.groupby(['MatchId', 'Map', 'Section', 'Player', 'Hero']).diff().fillna(0)
+            result = pd.merge(df_FinalStat, IsEchoUlt, left_index=True, right_index=True)
+            return result 
+
+        df_FinalStat = EchoDuplicate(df_FinalStat)
 
         self.df_FinalStat = df_FinalStat
 
