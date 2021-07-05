@@ -6,6 +6,7 @@ from AdvancedStat import *
 from TeamfightDetector import *
 from PeriEventTimeHistogram import *
 from MySQLConnection import *
+from sqlalchemy import exc 
 
 class ScrimLog():
     def __init__(self, csvname=None):
@@ -66,11 +67,14 @@ class ScrimLog():
 
         # idx_col
         self.idx_col = ['MatchId', 'Map', 'Section', 'Timestamp', 'Team', 'RoundName', 'Point', 'Player', 'Hero']
-    
+
+        # text_based col 
+        self.text_based_col = ['Position', 'DeathByHero', 'DeathByAbility', 'DeathByPlayer', 'Resurrected', 'DuplicatedHero', 'DuplicateStatus']
+
     def set_WorkshopStat(self):
         df_WorkshopStat = self.df_init.set_index(self.idx_col)
-
-        self.df_WorkshopStat = df_WorkshopStat
+        self.df_text_based_col = df_WorkshopStat[self.text_based_col]
+        self.df_WorkshopStat = df_WorkshopStat.drop(columns=self.text_based_col)
     
     def set_TraditionalStat(self):
 
@@ -146,16 +150,17 @@ class ScrimLog():
         df_FinalStat = self.df_TFStat.reset_index()
         df_FinalStat = df_FinalStat.groupby(by=self.idx_col).max()
         # add Text-based columns
-        text_based_col = ['Position', 'DeathByHero', 'DeathByAbility', 'DeathByPlayer', 'Resurrected', 'DuplicatedHero', 'DuplicateStatus']
-
-        df_text_based_stats = self.df_WorkshopStat[text_based_col]
-        df_FinalStat = pd.merge(df_FinalStat, df_text_based_stats, left_index=True, right_index=True)
+        df_FinalStat = pd.merge(df_FinalStat, self.df_text_based_col, left_index=True, right_index=True)
         # Echo Duplicate
         def EchoDuplicate(df_FinalStat):
-            F_Duplicating = df_FinalStat[['DuplicateStatus']].replace('DUPLICATING', 1).fillna(0)
-            F_Duplicating.rename(columns={'DuplicateStatus':'IsEchoUlt'}, inplace=True)
-            IsEchoUlt = F_Duplicating.groupby(['MatchId', 'Map', 'Section', 'Player', 'Hero']).diff().fillna(0)
-            result = pd.merge(df_FinalStat, IsEchoUlt, left_index=True, right_index=True)
+            if 'DuplicateStatus' in df_FinalStat.columns:
+                F_Duplicating = df_FinalStat[['DuplicateStatus']].replace('DUPLICATING', 1).fillna(0)
+                F_Duplicating.rename(columns={'DuplicateStatus':'IsEchoUlt'}, inplace=True)
+                IsEchoUlt = F_Duplicating.groupby(['MatchId', 'Map', 'Section', 'Player', 'Hero']).diff().fillna(0)
+                result = pd.merge(df_FinalStat, IsEchoUlt, left_index=True, right_index=True)
+            else:
+                df_FinalStat['DuplicateStatus'] = 0
+                result = df_FinalStat
             return result 
 
         df_FinalStat = EchoDuplicate(df_FinalStat)
@@ -200,7 +205,6 @@ class ScrimLog():
         f.close()
 
     def update_FinalStat_to_sql(self):
-
         def get_filelist_all(): 
             # set path
             filepath = r'G:/공유 드라이브/NYXL Scrim Log/Csv/'
@@ -211,7 +215,7 @@ class ScrimLog():
             
         def get_filelist_updated():
             filepath = r'G:/공유 드라이브/NYXL Scrim Log/Csv/'
-            updated_csv = 'FilesUpdated_FinalStat_MySQL.txt'
+            updated_csv = 'FilesUpdated_FinalStat_MySQL_new.txt'
             f = open(os.path.join(filepath, updated_csv), 'r+')
             lines = f.readlines()
             updated_filelist = []
@@ -232,13 +236,16 @@ class ScrimLog():
 
         # export and write
         filepath = r'G:/공유 드라이브/NYXL Scrim Log/Csv/'
-        updated_csv = 'FilesUpdated_FinalStat_MySQL.txt'
+        updated_csv = 'FilesUpdated_FinalStat_MySQL_new.txt'
         f = open(os.path.join(filepath, updated_csv), 'a')
         for filename in csv_filelist_to_update:
             scrimlog = ScrimLog(filename)
-            df_sql = MySQLConnection(input_df=scrimlog.df_FinalStat.reset_index(), dbname='scrim_finalstat') # reset_index to export to mysql db
+            df_sql = MySQLConnection(input_df=scrimlog.df_FinalStat.reset_index(), dbname='scrimloganalysis') # reset_index to export to mysql db
             table_name = scrimlog.csvname.split('.csv')[0] # drop '.csv' as a table_name
-            df_sql.export_to_db(table_name=table_name, if_exists='replace')
+            try: # Insert dataframe into DB except duplicated primary keys
+                df_sql.export_to_db(table_name='finalstat', if_exists='append')
+            except exc.IntegrityError:
+                pass 
 
             f.write(filename+'\n')
             print(f'File Exported to {df_sql.dbname}: {filename}')
