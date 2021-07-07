@@ -4,6 +4,9 @@ import glob
 import os 
 from StatAbbr import *
 from MySQLConnection import *
+from sqlalchemy import exc 
+from MapNameList import * 
+from tqdm import tqdm
 
 class PETH():
     def __init__(self, FinalStatName=None):
@@ -20,7 +23,20 @@ class PETH():
 
     def set_df_init(self):
         if self.import_type == 'sql': # import FinalStat from sql
-            self.df_init = MySQLConnection(dbname='scrim_finalstat').read_table_as_df(self.FinalStatName)
+            dbname = 'scrimloganalysis'
+            tablename = 'finalstat'
+            match_id = self.FinalStatName.split('_')[0] + '_' + self.FinalStatName.split('_')[1]
+            mapname = self.FinalStatName.split('_')[3].split('.')[0]
+            if mapname in mapname_typocorrection.keys():
+                mapname = mapname_typocorrection[mapname]
+            if mapname in mapnamelist: 
+                num_map = 1
+            else: 
+                num_map = mapname[-1]
+            sql = f'SELECT * FROM {tablename} WHERE `MatchId`="{match_id}" AND `num_map`={num_map} AND `Map`="{mapname}";'
+            print(sql)
+            self.df_init = pd.read_sql(sql=sql, con=MySQLConnection(dbname=dbname).engine)
+            # self.df_init = MySQLConnection(dbname='scrim_finalstat').read_table_as_df(self.FinalStatName)
         elif self.import_type == 'csv': # improt FinalStat from csv
             self.FinalStatCsvName = self.FinalStatName
             path_FinalStat = r'G:\공유 드라이브\NYXL Scrim Log\FinalStat'
@@ -51,11 +67,11 @@ class PETH():
         df_event_onset = self.find_events()
         
         if len(df_event_onset) == 0: # event가 한 번도 일어나지 않았을 때
-            df_PETH = pd.DataFrame({'MatchId':[], 'Map':[], 'Section':[], 'RoundName':[], 'num_Event':[], 'ref_Team':[], 'ref_Player':[], 'ref_Hero':[], 'ref_Event':[], 'Team':[], 'Player':[], 'Hero':[], 'Timestamp':[]})
+            df_PETH = pd.DataFrame({'MatchId':[], 'num_map':[], 'Map':[], 'Section':[], 'RoundName':[], 'num_Event':[], 'ref_Team':[], 'ref_Player':[], 'ref_Hero':[], 'ref_Event':[], 'Team':[], 'Player':[], 'Hero':[], 'Timestamp':[]})
         else:
             idx_col = ['MatchId', 'Map', 'Section', 'RoundName', 'Team', 'Player', 'Hero', 'Timestamp']
-            df_PETH = pd.DataFrame()
             num_Event = 0
+            df_list = []
             for multi_idx, row in df_event_onset.iterrows():
                 num_Event += 1
                 # set reference vars
@@ -69,6 +85,7 @@ class PETH():
                 event_onset = row['Timestamp']
                 df_event_recorder = self.df_init[(self.df_init['Timestamp'] >= (event_onset - (self.period + 1))) & (self.df_init['Timestamp'] <= (event_onset + (self.period + 1)))]
                 df_event_recorder = df_event_recorder.copy() # make a copy to avoid SettingWithCopyWarning
+                df_event_recorder['EventOnset'] = event_onset
                 df_event_recorder['Timestamp'] -= event_onset
                 df_event_recorder['Timestamp'] = df_event_recorder['Timestamp'].astype(int) # Timestamp 소숫점 자리 버림
                 
@@ -79,11 +96,11 @@ class PETH():
                 df_event_recorder['ref_Event'] = self.event_name
                 df_event_recorder['num_Event'] = num_Event 
 
-
                 # concat
-                df_PETH = pd.concat([df_PETH, df_event_recorder], ignore_index=True)
+                df_list.append(df_event_recorder)
 
-            df_PETH = df_PETH.set_index(['MatchId', 'Map', 'Section', 'RoundName', 'num_Event', 'ref_Team', 'ref_Player', 'ref_Hero', 'ref_Event', 'Team', 'Player', 'Hero', 'Timestamp'])
+            df_PETH = pd.concat(df_list)            
+            df_PETH = df_PETH.set_index(['MatchId', 'num_map', 'Map', 'Section', 'RoundName', 'num_Event', 'ref_Team', 'ref_Player', 'ref_Hero', 'ref_Event', 'Team', 'Player', 'Hero', 'Timestamp'])
 
         return df_PETH 
 
@@ -127,22 +144,27 @@ class PETH():
         f.close()
     
     def update_PETH_to_sql(self):
-
         def get_filelist_all(): 
-            filelist_FinalStat = MySQLConnection(dbname='scrim_finalstat').get_table_names()
-            peth_tag = self.stat_name_abbr.lower() # sql table 과 통일 위해 소문자 변환
-            filelist_PETH = [x + f'_{peth_tag}' for x in filelist_FinalStat]
-            filelist_PETH = filelist_PETH
+            # set path
+            filepath = r'G:/공유 드라이브/NYXL Scrim Log/Csv/'
+            filelist = os.listdir(filepath)
+            csv_filelist = [x for x in filelist if x.endswith('.csv')]
 
-            return filelist_PETH
+            return csv_filelist
             
         def get_filelist_updated():
-            tablelist_peth = MySQLConnection(dbname='scrim_peth').get_table_names()
-            peth_tag = self.stat_name_abbr.lower() # sql table 과 통일 위해 소문자 변환
+            filepath = r'G:/공유 드라이브/NYXL Scrim Log/Csv/'
+            updated_csv = f'FilesUpdated_{self.stat_name_abbr}_MySQL.txt'
+            f = open(os.path.join(filepath, updated_csv), 'r+')
+            lines = f.readlines()
+            updated_filelist = []
 
-            filelist_updated = [x for x in tablelist_peth if x.endswith(f'_{peth_tag}')]
-
-            return filelist_updated
+            for line in lines:
+                updated_filelist.append(line.replace('\n', ''))
+            
+            f.close()
+            
+            return updated_filelist
 
         filelist_FinalStat = get_filelist_all() # all filelist
         filelist_updated = get_filelist_updated() # updated filelist
@@ -151,26 +173,22 @@ class PETH():
         filelist_to_update = list(set(filelist_FinalStat) - set(filelist_updated))
         filelist_to_update.sort()
 
-        def drop_peth_tag(table_name_from_sql):
-                filename = table_name_from_sql
-                filename = filename.replace('_cd1%', '')
-                filename = filename.replace('_cd2%', '')
-                filename = filename.replace('_cd2nd%', '')
-                filename = filename.replace('_cdctrl%', '')
-                filename = filename.replace('_fb', '')
-                filename = filename.replace('_ultu', '')
-                return filename
-
-        filelist_to_update = list(map(drop_peth_tag, filelist_to_update))
-
         # export
-        for filename in filelist_to_update:
+        filepath = r'G:/공유 드라이브/NYXL Scrim Log/Csv/'
+        updated_csv = f'FilesUpdated_{self.stat_name_abbr}_MySQL.txt'
+        for filename in tqdm(filelist_to_update):
+            f = open(os.path.join(filepath, updated_csv), 'a')
             file_PETH = PETH(filename)
             file_PETH.set_import_type('sql')
             file_PETH.set_search_condition(event_name=self.event_name, threshold=self.threshold)
             input_PETH = file_PETH.get_PETH()
-            df_sql = MySQLConnection(input_df=input_PETH.reset_index(), dbname='scrim_peth') # reset_index to export to mysql db
-            table_name = filename
-            df_sql.export_to_db(table_name=f'{table_name}_{file_PETH.stat_name_abbr}', if_exists='fail')
-
-            print(f'File Exported to {df_sql.dbname}: {filename}_{file_PETH.stat_name_abbr}')
+            df_sql = MySQLConnection(input_df=input_PETH.reset_index(), dbname='scrimloganalysis') # reset_index to export to mysql db
+            print('Data Exporting...')
+            try: # Insert dataframe into DB except duplicated primary keys
+                df_sql.export_to_db(table_name='peth', if_exists='append')
+                f.write(filename+'\n')
+                print(f'File Exported: {filename}_{file_PETH.stat_name_abbr} to {df_sql.dbname}')
+            except exc.IntegrityError:
+                f.write(filename+'\n') 
+                print('IntegrigyError')
+            f.close()

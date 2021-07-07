@@ -7,6 +7,7 @@ from TeamfightDetector import *
 from PeriEventTimeHistogram import *
 from MySQLConnection import *
 from sqlalchemy import exc 
+from MapNameList import *
 
 class ScrimLog():
     def __init__(self, csvname=None):
@@ -15,6 +16,12 @@ class ScrimLog():
         else:
             self.csvname = csvname
             self.match_id = csvname[0:11] # match_id: '(yyyymmdd)_(scrimNum)' (e.g. 20200318_02)
+            # define num_map
+            mapname = csvname.split('_')[3].split('.')[0]
+            if mapname in mapnamelist:
+                self.num_map = 1
+            else: 
+                self.num_map = mapname[-1]
             self.set_directory()
             self.set_df_input()
             self.set_index()
@@ -42,6 +49,9 @@ class ScrimLog():
         # match_id
         self.df_init['MatchId'] = self.match_id
 
+        # num_map
+        self.df_init['num_map'] = self.num_map
+
         # team name
         NYE_alt_names = ['NYXL', 'Team 1', '1팀', 'New York Excelsior', 'New York']
         team_one_name = self.df_init['Team'].unique()[0]
@@ -66,7 +76,7 @@ class ScrimLog():
         self.team_two_name = team_two_name
 
         # idx_col
-        self.idx_col = ['MatchId', 'Map', 'Section', 'Timestamp', 'Team', 'RoundName', 'Point', 'Player', 'Hero']
+        self.idx_col = ['MatchId', 'num_map', 'Map', 'Section', 'Timestamp', 'Team', 'RoundName', 'Point', 'Player', 'Hero']
 
         # text_based col 
         self.text_based_col = ['Position', 'DeathByHero', 'DeathByAbility', 'DeathByPlayer', 'Resurrected', 'DuplicatedHero', 'DuplicateStatus']
@@ -237,16 +247,16 @@ class ScrimLog():
         # export and write
         filepath = r'G:/공유 드라이브/NYXL Scrim Log/Csv/'
         updated_csv = 'FilesUpdated_FinalStat_MySQL_new.txt'
-        f = open(os.path.join(filepath, updated_csv), 'a')
         for filename in csv_filelist_to_update:
+            f = open(os.path.join(filepath, updated_csv), 'a')
             scrimlog = ScrimLog(filename)
             df_sql = MySQLConnection(input_df=scrimlog.df_FinalStat.reset_index(), dbname='scrimloganalysis') # reset_index to export to mysql db
             table_name = scrimlog.csvname.split('.csv')[0] # drop '.csv' as a table_name
             try: # Insert dataframe into DB except duplicated primary keys
                 df_sql.export_to_db(table_name='finalstat', if_exists='append')
+                f.write(filename+'\n')
+                print(f'File Exported to {df_sql.dbname}: {filename}')
             except exc.IntegrityError:
-                pass 
-
-            f.write(filename+'\n')
-            print(f'File Exported to {df_sql.dbname}: {filename}')
-        f.close()
+                f.write(filename+'\n')
+                print('IntegrigyError')
+            f.close()
